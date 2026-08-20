@@ -1,1162 +1,3262 @@
+-- BASE ESTÁVEL: sem salvamento por UserId/arquivo.
+-- Preservada a versão funcional enviada pelo usuário.
+
 --[[
-    VIDA DE DINOSSAURO
-    MODERN DINOSAUR TEST HUB - PC VISUAL FINAL
+	VIDA DE DINOSSAURO
+	VISUAL HUB
+	Por: zJaquesx777
 
-    Coloque como LocalScript em:
-    StarterPlayer > StarterPlayerScripts
+	Hub visual e diagnóstico para o seu jogo de teste.
 
-    FUNÇÕES:
-    • Hub principal compacto
-    • ESP estilo painel com ícone do dinossauro, nick e vida
-    • Ícone por tipo de dinossauro
-    • Cadáver somente com 🦴
-    • Carne somente com 🥩
-    • Orbit, Costas, Teleporte e Espectador
-    • Lista e pesquisa de jogadores
-    • Anti Grab com contagem e tecla Espaço
-
-    ATRIBUTO RECOMENDADO:
-    Character:SetAttribute("DinosaurType", "T-Rex")
-
-    TIPOS RECONHECIDOS:
-    T-Rex -> 🦖 | Velociraptor -> 🦎 | Triceratops -> 🦏
-    Spinosaurus -> 🐊 | Brachiosaurus -> 🦕 | Pteranodon -> 🦅
+	Recursos:
+	• ESP de jogadores
+	• Nome, vida e ícone de dinossauro
+	• Contorno branco em jogadores
+	• Aliados múltiplos com contorno verde
+	• ESP de carne, comida, ossos e cadáveres
+	• Contorno vermelho em objetos do mapa
+	• Players in Server com pesquisa e proximidade
+	• Atualização manual e automática
+	• Espectador
+	• Remover noite visualmente
+	• Minimizar para ícone de T-Rex
+	• Detector MovementState = Carried
+	• Logs do Anti-Grab
+	• Sem teclas de atalho
 ]]
 
 local Players = game:GetService("Players")
+local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local GUI_NAME = "DinosaurVisualHub"
 
-local CONFIG = {
-    DistanceMin = 1,
-    DistanceMax = 150,
-    DistanceDefault = 6,
-    SpeedMin = 5,
-    SpeedMax = 150,
-    SpeedDefault = 35,
-    HeightMin = -30,
-    HeightMax = 50,
-    HeightDefault = 1.5,
-    OrbitSpeed = 1.5,
-    NearDistance = 10,
-    MovementSmoothness = 12,
-    PlayerESP = true,
-    PlayerNames = true,
-    HealthESP = true,
-    CorpseESP = true,
-    MeatESP = true,
-    WorldScanInterval = 1.25,
-    BillboardMaxDistance = 1000,
-    PlayerPanelTransparency = 0.18,
-    Theme = {
-        Background = Color3.fromRGB(14, 17, 23),
-        TopBar = Color3.fromRGB(20, 23, 31),
-        Sidebar = Color3.fromRGB(17, 20, 27),
-        Panel = Color3.fromRGB(24, 27, 35),
-        Card = Color3.fromRGB(29, 32, 41),
-        Button = Color3.fromRGB(32, 36, 46),
-        ButtonHover = Color3.fromRGB(49, 56, 70),
-        Primary = Color3.fromRGB(66, 150, 92),
-        PrimaryBlue = Color3.fromRGB(55, 105, 210),
-        Purple = Color3.fromRGB(105, 75, 170),
-        Danger = Color3.fromRGB(145, 55, 62),
-        Success = Color3.fromRGB(45, 120, 70),
-        Text = Color3.fromRGB(242, 245, 250),
-        Muted = Color3.fromRGB(155, 163, 179),
-        Border = Color3.fromRGB(83, 91, 108),
-        HealthBack = Color3.fromRGB(48, 54, 64),
-    },
+local Theme = {
+	Background = Color3.fromRGB(9, 14, 23),
+	TopBar = Color3.fromRGB(14, 24, 38),
+	Sidebar = Color3.fromRGB(11, 18, 29),
+	Panel = Color3.fromRGB(19, 29, 44),
+	PanelLight = Color3.fromRGB(29, 43, 63),
+	Button = Color3.fromRGB(28, 43, 62),
+	ButtonHover = Color3.fromRGB(48, 70, 96),
+
+	Blue = Color3.fromRGB(65, 135, 225),
+	Green = Color3.fromRGB(65, 190, 115),
+	Red = Color3.fromRGB(235, 65, 75),
+	Yellow = Color3.fromRGB(240, 185, 65),
+	Purple = Color3.fromRGB(135, 90, 215),
+
+	Text = Color3.fromRGB(240, 245, 250),
+	Muted = Color3.fromRGB(145, 160, 180),
+	WhiteOutline = Color3.fromRGB(245, 250, 255),
+	RedOutline = Color3.fromRGB(255, 45, 55),
+	HealthBack = Color3.fromRGB(42, 55, 72),
+	Border = Color3.fromRGB(65, 85, 110),
 }
 
-local selectedPlayer
-local movementMode = "None"
-local distance = CONFIG.DistanceDefault
-local speed = CONFIG.SpeedDefault
-local height = CONFIG.HeightDefault
-local orbitAngle = 0
-local minimized = false
-local spectating = false
-local draggingWindow = false
-local running = true
-local grabActive = false
-local antiGrabEnabled = false
-local grabDeadline = 0
+local Config = {
+	PlayerESP = true,
+	PlayerNames = true,
+	PlayerHealth = true,
+	PlayerIcons = true,
+	PlayerHighlights = true,
+	PlayerESPScale = 1.0,
+	PlayerESPMinScale = 0.5,
+	PlayerESPMaxScale = 2.5,
 
-local movementConnection
-local deathConnection
-local notificationFrame
-local targetHighlight
+	WorldESP = true,
+	CorpseESP = true,
+	MeatESP = true,
+	FoodESP = true,
+	BoneESP = true,
+
+	AutoRefresh = true,
+	RemoveNight = false,
+
+	MaxDistance = 1000,
+	WorldRefreshTime = 2,
+	PlayerRefreshTime = 1,
+	LowHealthLimit = 0.35,
+
+	Player = {
+		WalkSpeed = 16,
+		WalkSpeedEnabled = false,
+		JumpPower = 50,
+		JumpPowerEnabled = false,
+		Fly = false,
+		FlySpeed = 55,
+	},
+
+	Fuga = {
+		Enabled = false,
+		Active = false,
+		Threshold = 0.15,
+		DownOffset = -50,
+		ReleaseOffset = 100,
+	},
+
+	PvP = {
+		Enabled = false,
+		Mode = "MatarV1",
+		Speed = 3,
+		CaptureSpeed = 8,
+		Height = 0,
+		Depth = 0,
+		Distance = 3,
+		OrbitAngle = 0,
+		CycleStarted = 0,
+		Retreating = false,
+	},
+}
+
+local oldGui = PlayerGui:FindFirstChild(GUI_NAME)
+
+if oldGui then
+	oldGui:Destroy()
+end
+
+local connections = {}
+local playerEntries = {}
+local playerESP = {}
+local worldESP = {}
+local allies = {}
+local selectedPlayer
+local spectating = false
 local originalCameraSubject
 local originalCameraType
-
-local playerButtons = {}
-local playerESP = {}
-local playerESPConnections = {}
-local corpseESP = {}
-local meatESP = {}
-
-local oldHub = PlayerGui:FindFirstChild("DinosaurModernHubPCFinal")
-if oldHub then oldHub:Destroy() end
+local originalClockTime
+local originalBrightness
+local running = true
+local minimized = false
+local currentPage = "Home"
+local logEntries = {}
+local characterConnections = {}
+local worldScanVersion = 0
+local pvpMoving = false
+local pvpConnection
+local pvpControls = {}
+local pvpModeButtons = {}
+local playerControls = {}
+local playerFlyConnection
+local fugaConnection
+local originalWalkSpeed
+local originalJumpPower
+local fugaWasActive = false
+local fugaTargetY
+local fugaReleaseTargetY
+local fugaReleasing = false
 
 local function create(className, properties)
-    local object = Instance.new(className)
-    for property, value in pairs(properties) do
-        pcall(function() object[property] = value end)
-    end
-    return object
+	local object = Instance.new(className)
+
+	for property, value in pairs(properties or {}) do
+		pcall(function()
+			object[property] = value
+		end)
+	end
+
+	return object
 end
 
-local function corner(parent, radius)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius)
-    c.Parent = parent
-    return c
+local function addCorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = parent
+	return corner
 end
 
-local function stroke(parent, color, thickness, transparency)
-    local s = Instance.new("UIStroke")
-    s.Color = color or CONFIG.Theme.Border
-    s.Thickness = thickness or 1
-    s.Transparency = transparency or 0.25
-    s.Parent = parent
-    return s
+local function addStroke(parent, color, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color or Theme.WhiteOutline
+	stroke.Thickness = thickness or 1
+	stroke.Transparency = transparency or 0.2
+	stroke.Parent = parent
+	return stroke
 end
 
 local function tween(object, properties, duration)
-    local animation = TweenService:Create(object, TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), properties)
-    animation:Play()
-    return animation
-end
+	local animation = TweenService:Create(
+		object,
+		TweenInfo.new(
+			duration or 0.2,
+			Enum.EasingStyle.Quad,
+			Enum.EasingDirection.Out
+		),
+		properties
+	)
 
-local function hover(button, normal, over)
-    button.MouseEnter:Connect(function() tween(button, {BackgroundColor3 = over}, 0.15) end)
-    button.MouseLeave:Connect(function() tween(button, {BackgroundColor3 = normal}, 0.15) end)
-end
-
-local ScreenGui = create("ScreenGui", {
-    Name = "DinosaurModernHubPCFinal",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    DisplayOrder = 9999,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-    Parent = PlayerGui,
-})
-
-local Main = create("Frame", {
-    Name = "Main",
-    Size = UDim2.fromOffset(760, 480),
-    Position = UDim2.new(0.5, -380, 0.5, -240),
-    BackgroundColor3 = CONFIG.Theme.Background,
-    BorderSizePixel = 0,
-    Parent = ScreenGui,
-})
-corner(Main, 15)
-stroke(Main, CONFIG.Theme.Border, 1, 0.15)
-
-local TopBar = create("Frame", {
-    Size = UDim2.new(1, 0, 0, 58),
-    BackgroundColor3 = CONFIG.Theme.TopBar,
-    BorderSizePixel = 0,
-    Parent = Main,
-})
-corner(TopBar, 15)
-
-local DinoIcon = create("TextLabel", {
-    Size = UDim2.fromOffset(38, 38),
-    Position = UDim2.fromOffset(10, 10),
-    BackgroundColor3 = Color3.fromRGB(35, 40, 50),
-    BorderSizePixel = 0,
-    Text = "🦖",
-    TextColor3 = Color3.new(1, 1, 1),
-    Font = Enum.Font.GothamBold,
-    TextSize = 21,
-    TextXAlignment = Enum.TextXAlignment.Center,
-    TextYAlignment = Enum.TextYAlignment.Center,
-    Parent = TopBar,
-})
-corner(DinoIcon, 9)
-
-create("TextLabel", {
-    Size = UDim2.new(1, -320, 0, 24),
-    Position = UDim2.fromOffset(58, 6),
-    BackgroundTransparency = 1,
-    Text = "Vida de Dinossauro",
-    TextColor3 = CONFIG.Theme.Text,
-    Font = Enum.Font.GothamBold,
-    TextSize = 16,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = TopBar,
-})
-
-create("TextLabel", {
-    Size = UDim2.new(1, -320, 0, 17),
-    Position = UDim2.fromOffset(59, 32),
-    BackgroundTransparency = 1,
-    Text = "PC TEST HUB  •  VISUAL",
-    TextColor3 = CONFIG.Theme.Muted,
-    Font = Enum.Font.Gotham,
-    TextSize = 8,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = TopBar,
-})
-
-local Status = create("TextLabel", {
-    Size = UDim2.fromOffset(100, 28),
-    Position = UDim2.new(1, -205, 0, 15),
-    BackgroundColor3 = CONFIG.Theme.Success,
-    BorderSizePixel = 0,
-    Text = "● READY",
-    TextColor3 = Color3.fromRGB(150, 255, 175),
-    Font = Enum.Font.GothamBold,
-    TextSize = 8,
-    TextXAlignment = Enum.TextXAlignment.Center,
-    TextYAlignment = Enum.TextYAlignment.Center,
-    Parent = TopBar,
-})
-corner(Status, 7)
-
-local Minimize = create("TextButton", {
-    Size = UDim2.fromOffset(28, 28),
-    Position = UDim2.new(1, -94, 0, 15),
-    BackgroundColor3 = CONFIG.Theme.Button,
-    BorderSizePixel = 0,
-    Text = "—",
-    TextColor3 = CONFIG.Theme.Text,
-    Font = Enum.Font.GothamBold,
-    TextSize = 15,
-    Parent = TopBar,
-})
-corner(Minimize, 7)
-hover(Minimize, CONFIG.Theme.Button, CONFIG.Theme.ButtonHover)
-
-local Close = create("TextButton", {
-    Size = UDim2.fromOffset(28, 28),
-    Position = UDim2.new(1, -53, 0, 15),
-    BackgroundColor3 = Color3.fromRGB(60, 30, 35),
-    BorderSizePixel = 0,
-    Text = "×",
-    TextColor3 = Color3.fromRGB(255, 170, 175),
-    Font = Enum.Font.GothamBold,
-    TextSize = 17,
-    Parent = TopBar,
-})
-corner(Close, 7)
-hover(Close, Color3.fromRGB(60, 30, 35), CONFIG.Theme.Danger)
-
-local Sidebar = create("Frame", {
-    Size = UDim2.new(0, 175, 1, -58),
-    Position = UDim2.fromOffset(0, 58),
-    BackgroundColor3 = CONFIG.Theme.Sidebar,
-    BorderSizePixel = 0,
-    Parent = Main,
-})
-
-create("TextLabel", {
-    Size = UDim2.new(1, -22, 0, 22),
-    Position = UDim2.fromOffset(12, 13),
-    BackgroundTransparency = 1,
-    Text = "CONTROL CENTER",
-    TextColor3 = CONFIG.Theme.Muted,
-    Font = Enum.Font.GothamBold,
-    TextSize = 8,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = Sidebar,
-})
-
-local function sideButton(text, y)
-    local b = create("TextButton", {
-        Size = UDim2.new(1, -20, 0, 34),
-        Position = UDim2.fromOffset(10, y),
-        BackgroundColor3 = CONFIG.Theme.Button,
-        BorderSizePixel = 0,
-        Text = text,
-        TextColor3 = CONFIG.Theme.Text,
-        Font = Enum.Font.GothamMedium,
-        TextSize = 9,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Sidebar,
-    })
-    corner(b, 7)
-    local p = Instance.new("UIPadding")
-    p.PaddingLeft = UDim.new(0, 10)
-    p.Parent = b
-    hover(b, CONFIG.Theme.Button, CONFIG.Theme.ButtonHover)
-    return b
-end
-
-local MovementButton = sideButton("◈   MOVEMENT", 45)
-local PlayerESPButton = sideButton("◉   PLAYERS: ON", 85)
-local NamesButton = sideButton("◎   NAMES: ON", 125)
-local HealthButton = sideButton("♥   HEALTH: ON", 165)
-local CorpseButton = sideButton("🦴   CORPSES: ON", 205)
-local MeatButton = sideButton("🥩   MEAT: ON", 245)
-local SpectateButtonSide = sideButton("◌   SPECTATE", 285)
-local ClearButton = sideButton("×   CLEAR TARGET", 325)
-local AntiGrabButton = sideButton("⛓  ANTI GRAB: OFF", 365)
-
-create("TextLabel", {
-    Size = UDim2.new(1, -22, 0, 55),
-    Position = UDim2.fromOffset(12, 415),
-    BackgroundTransparency = 1,
-    Text = "INSERT • abrir/fechar\nF • teleporte   G • espectador\nX • parar   ESPAÇO • escapar",
-    TextColor3 = CONFIG.Theme.Muted,
-    Font = Enum.Font.Gotham,
-    TextSize = 7,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    Parent = Sidebar,
-})
-
-local Content = create("Frame", {
-    Size = UDim2.new(1, -175, 1, -58),
-    Position = UDim2.fromOffset(175, 58),
-    BackgroundTransparency = 1,
-    Parent = Main,
-})
-
-local TargetCard = create("Frame", {
-    Size = UDim2.new(1, -24, 0, 62),
-    Position = UDim2.fromOffset(12, 12),
-    BackgroundColor3 = CONFIG.Theme.Card,
-    BorderSizePixel = 0,
-    Parent = Content,
-})
-corner(TargetCard, 9)
-stroke(TargetCard, CONFIG.Theme.Border, 1, 0.3)
-
-create("TextLabel", {
-    Size = UDim2.new(1, -16, 0, 16),
-    Position = UDim2.fromOffset(8, 6),
-    BackgroundTransparency = 1,
-    Text = "TARGET",
-    TextColor3 = CONFIG.Theme.Muted,
-    Font = Enum.Font.GothamBold,
-    TextSize = 8,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = TargetCard,
-})
-
-local TargetLabel = create("TextLabel", {
-    Size = UDim2.new(1, -16, 0, 26),
-    Position = UDim2.fromOffset(8, 26),
-    BackgroundTransparency = 1,
-    Text = "Nenhum jogador selecionado",
-    TextColor3 = CONFIG.Theme.Text,
-    Font = Enum.Font.GothamMedium,
-    TextSize = 10,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = TargetCard,
-})
-
-local SearchBox = create("TextBox", {
-    Size = UDim2.fromOffset(210, 30),
-    Position = UDim2.fromOffset(12, 87),
-    BackgroundColor3 = CONFIG.Theme.Button,
-    BorderSizePixel = 0,
-    PlaceholderText = "Pesquisar jogador...",
-    PlaceholderColor3 = CONFIG.Theme.Muted,
-    Text = "",
-    TextColor3 = CONFIG.Theme.Text,
-    Font = Enum.Font.Gotham,
-    TextSize = 9,
-    ClearTextOnFocus = false,
-    Parent = Content,
-})
-corner(SearchBox, 7)
-local searchPadding = Instance.new("UIPadding")
-searchPadding.PaddingLeft = UDim.new(0, 9)
-searchPadding.Parent = SearchBox
-
-create("TextLabel", {
-    Size = UDim2.fromOffset(210, 18),
-    Position = UDim2.fromOffset(12, 123),
-    BackgroundTransparency = 1,
-    Text = "JOGADORES",
-    TextColor3 = CONFIG.Theme.Muted,
-    Font = Enum.Font.GothamBold,
-    TextSize = 8,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = Content,
-})
-
-local PlayerList = create("ScrollingFrame", {
-    Size = UDim2.fromOffset(210, 260),
-    Position = UDim2.fromOffset(12, 145),
-    BackgroundColor3 = CONFIG.Theme.Sidebar,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 3,
-    CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    Parent = Content,
-})
-corner(PlayerList, 9)
-create("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name, Parent = PlayerList})
-create("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = PlayerList})
-
-local ControlPanel = create("Frame", {
-    Size = UDim2.new(1, -238, 0, 260),
-    Position = UDim2.fromOffset(235, 145),
-    BackgroundColor3 = CONFIG.Theme.Panel,
-    BorderSizePixel = 0,
-    Parent = Content,
-})
-corner(ControlPanel, 9)
-stroke(ControlPanel, CONFIG.Theme.Border, 1, 0.3)
-
-create("TextLabel", {
-    Size = UDim2.new(1, -18, 0, 22),
-    Position = UDim2.fromOffset(10, 9),
-    BackgroundTransparency = 1,
-    Text = "MOVEMENT CONTROL",
-    TextColor3 = CONFIG.Theme.Text,
-    Font = Enum.Font.GothamBold,
-    TextSize = 10,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Parent = ControlPanel,
-})
-
-local function slider(parent, title, y, minValue, maxValue, initial, callback)
-    local titleLabel = create("TextLabel", {Size = UDim2.new(1, -70, 0, 16), Position = UDim2.fromOffset(10, y), BackgroundTransparency = 1, Text = title, TextColor3 = CONFIG.Theme.Muted, Font = Enum.Font.GothamMedium, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent})
-    local valueLabel = create("TextLabel", {Size = UDim2.fromOffset(55, 16), Position = UDim2.new(1, -65, 0, y), BackgroundTransparency = 1, Text = tostring(initial), TextColor3 = Color3.fromRGB(100, 185, 255), Font = Enum.Font.GothamBold, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, Parent = parent})
-    local bar = create("Frame", {Size = UDim2.new(1, -20, 0, 7), Position = UDim2.fromOffset(10, y + 22), BackgroundColor3 = Color3.fromRGB(47, 52, 62), BorderSizePixel = 0, Active = true, Parent = parent})
-    corner(bar, 5)
-    local percent = math.clamp((initial - minValue) / math.max(maxValue - minValue, 0.001), 0, 1)
-    local fill = create("Frame", {Size = UDim2.fromScale(percent, 1), BackgroundColor3 = CONFIG.Theme.PrimaryBlue, BorderSizePixel = 0, Parent = bar})
-    corner(fill, 5)
-    local knob = create("Frame", {Size = UDim2.fromOffset(13, 13), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(percent, 0.5), BackgroundColor3 = CONFIG.Theme.Text, BorderSizePixel = 0, Active = true, Parent = bar})
-    corner(knob, 8)
-    local dragging = false
-    local function update(x)
-        local width = math.max(bar.AbsoluteSize.X, 1)
-        local p = math.clamp((x - bar.AbsolutePosition.X) / width, 0, 1)
-        local value = math.round((minValue + (maxValue - minValue) * p) * 10) / 10
-        fill.Size = UDim2.fromScale(p, 1)
-        knob.Position = UDim2.fromScale(p, 0.5)
-        valueLabel.Text = tostring(value)
-        callback(value)
-    end
-    local function begin(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            update(input.Position.X)
-        end
-    end
-    bar.InputBegan:Connect(begin)
-    knob.InputBegan:Connect(begin)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then update(input.Position.X) end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
-    end)
-end
-
-slider(ControlPanel, "DISTANCE", 38, CONFIG.DistanceMin, CONFIG.DistanceMax, distance, function(v) distance = v end)
-slider(ControlPanel, "SPEED", 82, CONFIG.SpeedMin, CONFIG.SpeedMax, speed, function(v) speed = v end)
-slider(ControlPanel, "HEIGHT", 126, CONFIG.HeightMin, CONFIG.HeightMax, height, function(v) height = v end)
-
-local OrbitButton = create("TextButton", {Size = UDim2.new(0.48, -5, 0, 31), Position = UDim2.new(0, 9, 1, -40), BackgroundColor3 = CONFIG.Theme.PrimaryBlue, BorderSizePixel = 0, Text = "◉  ORBITAR", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 9, Parent = ControlPanel})
-corner(OrbitButton, 7)
-hover(OrbitButton, CONFIG.Theme.PrimaryBlue, Color3.fromRGB(75, 130, 235))
-
-local BackrideButton = create("TextButton", {Size = UDim2.new(0.48, -5, 0, 31), Position = UDim2.new(0.52, 0, 1, -40), BackgroundColor3 = CONFIG.Theme.Purple, BorderSizePixel = 0, Text = "◆  COSTAS", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 9, Parent = ControlPanel})
-corner(BackrideButton, 7)
-hover(BackrideButton, CONFIG.Theme.Purple, Color3.fromRGB(130, 95, 195))
-
-local TeleportButton = create("TextButton", {Size = UDim2.new(0.48, -5, 0, 31), Position = UDim2.new(0, 9, 1, -78), BackgroundColor3 = Color3.fromRGB(45, 125, 175), BorderSizePixel = 0, Text = "➜  TELEPORTAR", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 9, Parent = ControlPanel})
-corner(TeleportButton, 7)
-hover(TeleportButton, Color3.fromRGB(45, 125, 175), Color3.fromRGB(65, 160, 205))
-
-local SpectateButton = create("TextButton", {Size = UDim2.new(0.48, -5, 0, 31), Position = UDim2.new(0.52, 0, 1, -78), BackgroundColor3 = CONFIG.Theme.Purple, BorderSizePixel = 0, Text = "◌  ESPECTAR", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 9, Parent = ControlPanel})
-corner(SpectateButton, 7)
-hover(SpectateButton, CONFIG.Theme.Purple, Color3.fromRGB(130, 95, 195))
-
-local StopButton = create("TextButton", {Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 1, -46), BackgroundColor3 = CONFIG.Theme.Danger, BorderSizePixel = 0, Text = "■  PARAR AÇÕES", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 9, Parent = Content})
-corner(StopButton, 7)
-hover(StopButton, CONFIG.Theme.Danger, Color3.fromRGB(175, 65, 75))
-
-local function notify(message, color)
-    if notificationFrame then notificationFrame:Destroy() end
-    notificationFrame = create("TextLabel", {Size = UDim2.fromOffset(290, 38), Position = UDim2.new(1, -305, 1, -50), BackgroundColor3 = color or CONFIG.Theme.Card, BackgroundTransparency = 0.08, BorderSizePixel = 0, Text = tostring(message), TextColor3 = CONFIG.Theme.Text, Font = Enum.Font.GothamBold, TextSize = 10, TextWrapped = true, ZIndex = 100, Parent = ScreenGui})
-    corner(notificationFrame, 8)
-    stroke(notificationFrame, Color3.new(1, 1, 1), 1, 0.4)
-    local current = notificationFrame
-    task.delay(2.7, function()
-        if current and current.Parent then
-            tween(current, {BackgroundTransparency = 1, TextTransparency = 1}, 0.25)
-            task.wait(0.3)
-            if current then current:Destroy() end
-        end
-    end)
+	animation:Play()
+	return animation
 end
 
 local function getRoot(character)
-    if not character then return nil end
-    return character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+	if not character then
+		return nil
+	end
+
+	return character:FindFirstChild("HumanoidRootPart")
+		or character.PrimaryPart
 end
 
 local function getHumanoid(character)
-    if not character then return nil end
-    return character:FindFirstChildOfClass("Humanoid")
+	if not character then
+		return nil
+	end
+
+	return character:FindFirstChildOfClass("Humanoid")
 end
 
 local function getAdornee(character)
-    if not character then return nil end
-    return character:FindFirstChild("Head") or getRoot(character)
+	if not character then
+		return nil
+	end
+
+	return character:FindFirstChild("Head")
+		or getRoot(character)
 end
 
-local function dinosaurIconFromText(value)
-    local text = string.lower(tostring(value or ""))
-    if string.find(text, "velociraptor", 1, true) or string.find(text, "raptor", 1, true) then return "🦎" end
-    if string.find(text, "trex", 1, true) or string.find(text, "t-rex", 1, true) or string.find(text, "tyranno", 1, true) or string.find(text, "rex", 1, true) then return "🦖" end
-    if string.find(text, "triceratops", 1, true) or string.find(text, "ceratops", 1, true) then return "🦏" end
-    if string.find(text, "spino", 1, true) then return "🐊" end
-    if string.find(text, "brachio", 1, true) or string.find(text, "sauropod", 1, true) or string.find(text, "bronto", 1, true) then return "🦕" end
-    if string.find(text, "pteranodon", 1, true) or string.find(text, "pterodactyl", 1, true) then return "🦅" end
-    if string.find(text, "carno", 1, true) then return "🐂" end
-    if string.find(text, "dilo", 1, true) then return "🦎" end
-    return "🦖"
+local function getDistance(player)
+	local localRoot = getRoot(LocalPlayer.Character)
+	local targetRoot = getRoot(player.Character)
+
+	if not localRoot or not targetRoot then
+		return math.huge
+	end
+
+	return (localRoot.Position - targetRoot.Position).Magnitude
+end
+
+local function formatDistance(distance)
+	if distance == math.huge then
+		return "--"
+	end
+
+	return string.format("%.1f", distance)
+end
+
+local function addLog(eventName, details)
+	local entry = {
+		Time = os.clock(),
+		Event = eventName,
+		Details = details or {},
+	}
+
+	table.insert(logEntries, entry)
+
+	print(
+		"[DinosaurVisualHub]",
+		eventName,
+		details and details.Message or ""
+	)
+end
+
+local function isCarried()
+	local character = LocalPlayer.Character
+
+	if not character then
+		return false
+	end
+
+	return character:GetAttribute("MovementState") == "Carried"
+		or character:GetAttribute("ReplicatedMovementState") == "Carried"
+		or character:GetAttribute("IsBeingCarried") == true
 end
 
 local function getDinosaurType(player, character)
-    if character then
-        for _, name in ipairs({"DinosaurType", "DinoType", "Species", "Dinosaur", "Dino"}) do
-            local value = character:GetAttribute(name)
-            if value ~= nil and tostring(value) ~= "" then return tostring(value) end
-        end
-        local valueObject = character:FindFirstChild("DinosaurType") or character:FindFirstChild("DinoType") or character:FindFirstChild("Species")
-        if valueObject and valueObject:IsA("StringValue") then return valueObject.Value end
-    end
-    if player then
-        for _, name in ipairs({"DinosaurType", "DinoType", "Species", "Dinosaur", "Dino"}) do
-            local value = player:GetAttribute(name)
-            if value ~= nil and tostring(value) ~= "" then return tostring(value) end
-        end
-    end
-    return character and character.Name or "Dinosaur"
+	local names = {
+		"DinosaurType",
+		"DinoType",
+		"Species",
+		"Dinosaur",
+		"Dino",
+		"AnimalName",
+	}
+
+	if character then
+		for _, attributeName in ipairs(names) do
+			local value = character:GetAttribute(attributeName)
+
+			if value ~= nil and tostring(value) ~= "" then
+				return tostring(value)
+			end
+		end
+
+		for _, objectName in ipairs(names) do
+			local object = character:FindFirstChild(objectName)
+
+			if object and object:IsA("StringValue") then
+				return object.Value
+			end
+		end
+	end
+
+	if player then
+		for _, attributeName in ipairs(names) do
+			local value = player:GetAttribute(attributeName)
+
+			if value ~= nil and tostring(value) ~= "" then
+				return tostring(value)
+			end
+		end
+	end
+
+	return character and character.Name or "Dinosaur"
 end
 
-local function getDinosaurIcon(player, character)
-    return dinosaurIconFromText(getDinosaurType(player, character))
+local function dinosaurIcon(value)
+	local text = string.lower(tostring(value or ""))
+
+	if string.find(text, "velociraptor", 1, true)
+		or string.find(text, "raptor", 1, true)
+	then
+		return "⚡"
+	end
+
+	if string.find(text, "deinosuchus", 1, true) then
+		return "🐊"
+	end
+
+	if string.find(text, "mosasaur", 1, true)
+		or string.find(text, "mosasaurus", 1, true)
+		or string.find(text, "mosasaurid", 1, true)
+	then
+		return "🦈"
+	end
+
+	if string.find(text, "trex", 1, true)
+		or string.find(text, "t-rex", 1, true)
+		or string.find(text, "rex", 1, true)
+	then
+		return "🦖"
+	end
+
+	if string.find(text, "triceratops", 1, true)
+		or string.find(text, "ceratops", 1, true)
+	then
+		return "🦏"
+	end
+
+	if string.find(text, "spino", 1, true) then
+		return "🐊"
+	end
+
+	if string.find(text, "brachio", 1, true)
+		or string.find(text, "bronto", 1, true)
+	then
+		return "🦕"
+	end
+
+	if string.find(text, "pteranodon", 1, true)
+		or string.find(text, "pterodactyl", 1, true)
+	then
+		return "🦅"
+	end
+
+	return "🦖"
 end
 
-local function removeTargetHighlight()
-    if targetHighlight then targetHighlight:Destroy() targetHighlight = nil end
-end
-
-local function updateTargetHighlight()
-    removeTargetHighlight()
-    if not selectedPlayer or not selectedPlayer.Character then return end
-    targetHighlight = Instance.new("Highlight")
-    targetHighlight.Name = "DinosaurTargetHighlight"
-    targetHighlight.Adornee = selectedPlayer.Character
-    targetHighlight.FillColor = Color3.fromRGB(255, 190, 60)
-    targetHighlight.OutlineColor = Color3.new(1, 1, 1)
-    targetHighlight.FillTransparency = 0.7
-    targetHighlight.OutlineTransparency = 0
-    targetHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    targetHighlight.Parent = selectedPlayer.Character
+local function getPlayerIcon(player)
+	return dinosaurIcon(
+		getDinosaurType(
+			player,
+			player.Character
+		)
+	)
 end
 
 local function healthColor(percent)
-    if percent > 0.6 then return Color3.fromRGB(70, 220, 105) end
-    if percent > 0.3 then return Color3.fromRGB(240, 185, 60) end
-    return Color3.fromRGB(235, 65, 70)
+	if percent > 0.7 then
+		return Color3.fromRGB(65, 215, 105)
+	elseif percent > 0.4 then
+		return Color3.fromRGB(240, 190, 60)
+	elseif percent > 0.2 then
+		return Color3.fromRGB(240, 115, 50)
+	end
+
+	return Color3.fromRGB(235, 55, 65)
 end
 
+local function isLowHealth(humanoid)
+	if not humanoid or humanoid.MaxHealth <= 0 then
+		return false
+	end
+
+	return humanoid.Health / humanoid.MaxHealth <= Config.LowHealthLimit
+end
+
+-- Interface
+local ScreenGui = create("ScreenGui", {
+	Name = GUI_NAME,
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	DisplayOrder = 9999,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	Parent = PlayerGui,
+})
+
+local Main = create("Frame", {
+	Name = "Main",
+	Size = UDim2.fromOffset(850, 570),
+	Position = UDim2.new(0.5, -425, 0.5, -285),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	ClipsDescendants = true,
+	Parent = ScreenGui,
+})
+
+addCorner(Main, 18)
+addStroke(Main, Theme.Blue, 1, 0.25)
+
+local Wallpaper = create("Frame", {
+	Size = UDim2.new(1, 0, 0, 180),
+	BackgroundColor3 = Color3.fromRGB(22, 67, 83),
+	BorderSizePixel = 0,
+	ZIndex = 0,
+	Parent = Main,
+})
+
+create("UIGradient", {
+	Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(42, 130, 130)),
+		ColorSequenceKeypoint.new(0.45, Color3.fromRGB(29, 75, 99)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 19, 34)),
+	}),
+	Rotation = 18,
+	Parent = Wallpaper,
+})
+
+local circle1 = create("Frame", {
+	Size = UDim2.fromOffset(300, 300),
+	Position = UDim2.new(1, -190, 0, -170),
+	BackgroundColor3 = Theme.Green,
+	BackgroundTransparency = 0.84,
+	BorderSizePixel = 0,
+	ZIndex = 1,
+	Parent = Wallpaper,
+})
+
+addCorner(circle1, 200)
+
+local circle2 = create("Frame", {
+	Size = UDim2.fromOffset(220, 220),
+	Position = UDim2.fromOffset(-80, -120),
+	BackgroundColor3 = Theme.Blue,
+	BackgroundTransparency = 0.84,
+	BorderSizePixel = 0,
+	ZIndex = 1,
+	Parent = Wallpaper,
+})
+
+addCorner(circle2, 150)
+
+local TopBar = create("Frame", {
+	Size = UDim2.new(1, 0, 0, 70),
+	BackgroundColor3 = Theme.TopBar,
+	BackgroundTransparency = 0.08,
+	BorderSizePixel = 0,
+	ZIndex = 5,
+	Parent = Main,
+})
+
+local logo = create("TextLabel", {
+	Size = UDim2.fromOffset(48, 48),
+	Position = UDim2.fromOffset(13, 11),
+	BackgroundColor3 = Color3.fromRGB(37, 83, 85),
+	BorderSizePixel = 0,
+	Text = "🦖",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 29,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+addCorner(logo, 14)
+addStroke(logo, Theme.Green, 1, 0.2)
+
+create("TextLabel", {
+	Size = UDim2.fromOffset(400, 28),
+	Position = UDim2.fromOffset(76, 10),
+	BackgroundTransparency = 1,
+	Text = "VIDA DE DINOSSAURO",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 19,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+create("TextLabel", {
+	Size = UDim2.fromOffset(400, 18),
+	Position = UDim2.fromOffset(77, 39),
+	BackgroundTransparency = 1,
+	Text = "VISUAL CONTROL CENTER  •  Por: zJaquesx777",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+local Status = create("TextLabel", {
+	Size = UDim2.fromOffset(120, 32),
+	Position = UDim2.new(1, -198, 0, 19),
+	BackgroundColor3 = Color3.fromRGB(30, 90, 58),
+	BorderSizePixel = 0,
+	Text = "● ONLINE",
+	TextColor3 = Color3.fromRGB(165, 255, 190),
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+addCorner(Status, 9)
+
+local MinimizeButton = create("TextButton", {
+	Size = UDim2.fromOffset(34, 32),
+	Position = UDim2.new(1, -70, 0, 19),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "—",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 18,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+addCorner(MinimizeButton, 9)
+
+local CloseButton = create("TextButton", {
+	Size = UDim2.fromOffset(34, 32),
+	Position = UDim2.new(1, -31, 0, 19),
+	BackgroundColor3 = Color3.fromRGB(75, 34, 42),
+	BorderSizePixel = 0,
+	Text = "×",
+	TextColor3 = Color3.fromRGB(255, 180, 185),
+	Font = Enum.Font.GothamBold,
+	TextSize = 19,
+	ZIndex = 6,
+	Parent = TopBar,
+})
+
+addCorner(CloseButton, 9)
+
+-- Ícone flutuante de minimizar
+local FloatingButton = create("TextButton", {
+	Name = "FloatingTrex",
+	Size = UDim2.fromOffset(64, 64),
+	Position = UDim2.new(0, 25, 0.5, -32),
+	BackgroundColor3 = Color3.fromRGB(18, 40, 48),
+	BorderSizePixel = 0,
+	Text = "🦖",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 34,
+	Visible = false,
+	ZIndex = 200,
+	Parent = ScreenGui,
+})
+
+addCorner(FloatingButton, 20)
+addStroke(FloatingButton, Theme.Green, 2, 0.1)
+
+-- Sidebar
+local Sidebar = create("Frame", {
+	Size = UDim2.fromOffset(195, 500),
+	Position = UDim2.fromOffset(0, 70),
+	BackgroundColor3 = Theme.Sidebar,
+	BorderSizePixel = 0,
+	ZIndex = 4,
+	Parent = Main,
+})
+
+create("TextLabel", {
+	Size = UDim2.new(1, -24, 0, 24),
+	Position = UDim2.fromOffset(12, 16),
+	BackgroundTransparency = 1,
+	Text = "DINOSAUR SYSTEM",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 5,
+	Parent = Sidebar,
+})
+
+local function createSideButton(name, text, y)
+	local button = create("TextButton", {
+		Name = name,
+		Size = UDim2.new(1, -24, 0, 38),
+		Position = UDim2.fromOffset(12, y),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = text,
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamBold,
+		TextSize = 9,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
+		Parent = Sidebar,
+	})
+
+	addCorner(button, 9)
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.Parent = button
+
+	button.MouseEnter:Connect(function()
+		tween(button, {
+			BackgroundColor3 = Theme.ButtonHover,
+		}, 0.15)
+	end)
+
+	button.MouseLeave:Connect(function()
+		if button:GetAttribute("Selected") ~= true then
+			tween(button, {
+				BackgroundColor3 = Theme.Button,
+			}, 0.15)
+		end
+	end)
+
+	return button
+end
+
+local HomeButton = createSideButton("HomeButton", "⌂   HOME", 54)
+local PlayersButton = createSideButton("PlayersButton", "◎   PLAYERS IN SERVER", 99)
+local WorldButton = createSideButton("WorldButton", "◈   WORLD ESP", 144)
+local SurvivalButton = createSideButton("SurvivalButton", "♥   SURVIVAL", 189)
+local SettingsButton = createSideButton("SettingsButton", "⚙   SETTINGS", 234)
+local LogsButton = createSideButton("LogsButton", "▤   GRAB LOG", 279)
+local PvPButton = createSideButton("PvPButton", "⚔   PVP", 324)
+local PlayerButton = createSideButton("PlayerButton", "◉   PLAYER", 369)
+local RejoinButton = createSideButton("RejoinButton", "↻   REJOIN", 414)
+
+create("TextLabel", {
+	Size = UDim2.new(1, -24, 0, 38),
+	Position = UDim2.fromOffset(12, 458),
+	BackgroundTransparency = 1,
+	Text = "VISUAL BUILD\nPor: zJaquesx777\nSem atalhos de teclado",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 8,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	ZIndex = 5,
+	Parent = Sidebar,
+})
+
+-- Conteúdo
+local Content = create("Frame", {
+	Size = UDim2.new(1, -195, 1, -70),
+	Position = UDim2.fromOffset(195, 70),
+	BackgroundTransparency = 1,
+	ZIndex = 3,
+	Parent = Main,
+})
+
+local Pages = {}
+
+local function createPage(name)
+	local page = create("Frame", {
+		Name = name,
+		Size = UDim2.new(1, -24, 1, -24),
+		Position = UDim2.fromOffset(12, 12),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 4,
+		Parent = Content,
+	})
+
+	Pages[name] = page
+	return page
+end
+
+local HomePage = createPage("HomePage")
+local PlayersPage = createPage("PlayersPage")
+local WorldPage = createPage("WorldPage")
+local SurvivalPage = createPage("SurvivalPage")
+local SettingsPage = createPage("SettingsPage")
+local LogsPage = createPage("LogsPage")
+local PvPPage = createPage("PvPPage")
+local PlayerPage = createPage("PlayerPage")
+
+local function panel(parent, properties)
+	local object = create("Frame", properties)
+	addCorner(object, 12)
+	addStroke(object, Theme.Border, 1, 0.3)
+	return object
+end
+
+local function pageTitle(parent, title, subtitle)
+	create("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 26),
+		Position = UDim2.fromOffset(4, 2),
+		BackgroundTransparency = 1,
+		Text = title,
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 17,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	})
+
+	create("TextLabel", {
+		Size = UDim2.new(1, -20, 0, 18),
+		Position = UDim2.fromOffset(5, 30),
+		BackgroundTransparency = 1,
+		Text = subtitle,
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 9,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	})
+end
+
+-- Home
+pageTitle(
+	HomePage,
+	"Bem-vindo ao hub",
+	"Controle visual, ESP e diagnóstico do seu dinossauro."
+)
+
+local HomeCard = panel(HomePage, {
+	Size = UDim2.new(1, 0, 0, 170),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = HomePage,
+})
+
+create("TextLabel", {
+	Size = UDim2.new(1, -28, 0, 30),
+	Position = UDim2.fromOffset(14, 18),
+	BackgroundTransparency = 1,
+	Text = "VIDA DE DINOSSAURO",
+	TextColor3 = Theme.Green,
+	Font = Enum.Font.GothamBold,
+	TextSize = 22,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = HomeCard,
+})
+
+create("TextLabel", {
+	Size = UDim2.new(1, -28, 0, 55),
+	Position = UDim2.fromOffset(14, 57),
+	BackgroundTransparency = 1,
+	Text = "Use as abas para atualizar jogadores, controlar o ESP do mundo,\nmonitorar o estado Carried e configurar os elementos visuais.",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 11,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = HomeCard,
+})
+
+local HomeStatus = create("TextLabel", {
+	Size = UDim2.new(1, -28, 0, 35),
+	Position = UDim2.fromOffset(14, 119),
+	BackgroundColor3 = Color3.fromRGB(12, 24, 32),
+	BorderSizePixel = 0,
+	Text = "● Sistema visual ativo",
+	TextColor3 = Theme.Green,
+	Font = Enum.Font.GothamBold,
+	TextSize = 10,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = HomeCard,
+})
+
+addCorner(HomeStatus, 8)
+
+local HomeInfo = panel(HomePage, {
+	Size = UDim2.new(1, 0, 0, 180),
+	Position = UDim2.fromOffset(0, 247),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = HomePage,
+})
+
+local HomeStats = create("TextLabel", {
+	Size = UDim2.new(1, -28, 1, -28),
+	Position = UDim2.fromOffset(14, 14),
+	BackgroundTransparency = 1,
+	Text = "",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.Code,
+	TextSize = 12,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = HomeInfo,
+})
+
+-- Players
+pageTitle(
+	PlayersPage,
+	"Players in Server",
+	"Jogadores próximos aparecem primeiro."
+)
+
+local PlayersPanel = panel(PlayersPage, {
+	Size = UDim2.new(1, 0, 1, -62),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = PlayersPage,
+})
+
+local SearchBox = create("TextBox", {
+	Size = UDim2.fromOffset(230, 34),
+	Position = UDim2.fromOffset(14, 14),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	PlaceholderText = "Pesquisar jogador...",
+	PlaceholderColor3 = Theme.Muted,
+	Text = "",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 10,
+	ClearTextOnFocus = false,
+	Parent = PlayersPanel,
+})
+
+addCorner(SearchBox, 9)
+
+local searchPadding = Instance.new("UIPadding")
+searchPadding.PaddingLeft = UDim.new(0, 10)
+searchPadding.Parent = SearchBox
+
+local RefreshPlayersButton = create("TextButton", {
+	Size = UDim2.fromOffset(125, 34),
+	Position = UDim2.fromOffset(253, 14),
+	BackgroundColor3 = Theme.Blue,
+	BorderSizePixel = 0,
+	Text = "↻  ATUALIZAR",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	Parent = PlayersPanel,
+})
+
+addCorner(RefreshPlayersButton, 9)
+
+local PlayerCountLabel = create("TextLabel", {
+	Size = UDim2.fromOffset(170, 34),
+	Position = UDim2.new(1, -184, 0, 14),
+	BackgroundTransparency = 1,
+	Text = "0 jogadores",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 10,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	Parent = PlayersPanel,
+})
+
+local PlayerList = create("ScrollingFrame", {
+	Size = UDim2.new(1, -28, 1, -66),
+	Position = UDim2.fromOffset(14, 58),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 5,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	Parent = PlayersPanel,
+})
+
+addCorner(PlayerList, 10)
+
+create("UIPadding", {
+	PaddingTop = UDim.new(0, 8),
+	PaddingBottom = UDim.new(0, 8),
+	PaddingLeft = UDim.new(0, 8),
+	PaddingRight = UDim.new(0, 8),
+	Parent = PlayerList,
+})
+
+create("UIListLayout", {
+	Padding = UDim.new(0, 6),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Parent = PlayerList,
+})
+
+-- World
+pageTitle(
+	WorldPage,
+	"World ESP",
+	"Atualize carne, comida, ossos e cadáveres do mapa."
+)
+
+local WorldPanel = panel(WorldPage, {
+	Size = UDim2.new(1, 0, 0, 280),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = WorldPage,
+})
+
+local WorldRefreshButton = create("TextButton", {
+	Size = UDim2.fromOffset(170, 38),
+	Position = UDim2.fromOffset(16, 18),
+	BackgroundColor3 = Theme.Blue,
+	BorderSizePixel = 0,
+	Text = "↻  ATUALIZAR MUNDO",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 10,
+	Parent = WorldPanel,
+})
+
+addCorner(WorldRefreshButton, 9)
+
+local WorldStatus = create("TextLabel", {
+	Size = UDim2.new(1, -210, 0, 38),
+	Position = UDim2.fromOffset(200, 18),
+	BackgroundTransparency = 1,
+	Text = "Aguardando atualização",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 10,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = WorldPanel,
+})
+
+local function createToggle(parent, text, y, defaultValue, callback)
+	local button = create("TextButton", {
+		Size = UDim2.new(1, -32, 0, 35),
+		Position = UDim2.fromOffset(16, y),
+		BackgroundColor3 = defaultValue and Theme.ButtonHover or Theme.Button,
+		BorderSizePixel = 0,
+		Text = "",
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	})
+
+	addCorner(button, 8)
+
+	local enabled = defaultValue
+
+	local function update()
+		button.Text = (enabled and "●  " or "○  ") .. text
+		button.TextColor3 = enabled and Theme.Text or Theme.Muted
+		button.BackgroundColor3 = enabled
+			and Theme.ButtonHover
+			or Theme.Button
+	end
+
+	button.Activated:Connect(function()
+		enabled = not enabled
+		update()
+		callback(enabled)
+	end)
+
+	update()
+
+	return button
+end
+
+createToggle(WorldPanel, "ESP DE CADÁVERES / OSSOS", 72, Config.CorpseESP, function(value)
+	Config.CorpseESP = value
+
+	if not value then
+		for object in pairs(worldESP) do
+			if worldESP[object].Type == "Corpse"
+				or worldESP[object].Type == "Bone"
+			then
+				local data = worldESP[object]
+
+				if data.Gui then
+					data.Gui:Destroy()
+				end
+
+				worldESP[object] = nil
+			end
+		end
+	end
+end)
+
+createToggle(WorldPanel, "ESP DE CARNE", 114, Config.MeatESP, function(value)
+	Config.MeatESP = value
+end)
+
+createToggle(WorldPanel, "ESP DE COMIDA", 156, Config.FoodESP, function(value)
+	Config.FoodESP = value
+end)
+
+createToggle(WorldPanel, "ATUALIZAÇÃO AUTOMÁTICA", 198, Config.AutoRefresh, function(value)
+	Config.AutoRefresh = value
+end)
+
+-- Survival
+pageTitle(
+	SurvivalPage,
+	"Survival",
+	"Monitoramento visual da vida e do estado do personagem."
+)
+
+local SurvivalPanel = panel(SurvivalPage, {
+	Size = UDim2.new(1, 0, 0, 310),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = SurvivalPage,
+})
+
+local LocalHealthTitle = create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 25),
+	Position = UDim2.fromOffset(16, 16),
+	BackgroundTransparency = 1,
+	Text = "SUA VIDA",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 12,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = SurvivalPanel,
+})
+
+local LocalHealthBack = create("Frame", {
+	Size = UDim2.new(1, -32, 0, 28),
+	Position = UDim2.fromOffset(16, 52),
+	BackgroundColor3 = Theme.HealthBack,
+	BorderSizePixel = 0,
+	Parent = SurvivalPanel,
+})
+
+addCorner(LocalHealthBack, 12)
+
+local LocalHealthFill = create("Frame", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = Theme.Green,
+	BorderSizePixel = 0,
+	Parent = LocalHealthBack,
+})
+
+addCorner(LocalHealthFill, 12)
+
+local LocalHealthText = create("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Text = "100 / 100",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 11,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+	Parent = LocalHealthBack,
+})
+
+local GrabState = create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 42),
+	Position = UDim2.fromOffset(16, 96),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	Text = "● MovementState: normal",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 10,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = SurvivalPanel,
+})
+
+addCorner(GrabState, 9)
+
+createToggle(SurvivalPanel, "DETECTOR ANTI-GRAB", 153, false, function(value)
+	Config.AntiGrab = value
+
+	if not value then
+		GrabState.Text = "● MovementState: normal"
+		GrabState.TextColor3 = Theme.Muted
+	end
+end)
+
+create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 34),
+	Position = UDim2.fromOffset(16, 205),
+	BackgroundTransparency = 1,
+	Text = "O detector observa MovementState, ReplicatedMovementState e IsBeingCarried.",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = SurvivalPanel,
+})
+
+local function releaseFromFuga()
+	local root = getRoot(LocalPlayer.Character)
+	if root and fugaWasActive then
+		fugaWasActive = false
+		fugaTargetY = nil
+		fugaReleasing = true
+		fugaReleaseTargetY = root.Position.Y + Config.Fuga.ReleaseOffset
+		root.AssemblyLinearVelocity = Vector3.zero
+		GrabState.Text = "● Fuga desativada: subindo +100"
+		GrabState.TextColor3 = Theme.Green
+	end
+end
+
+createToggle(SurvivalPanel, "FUGA", 205, Config.Fuga.Enabled, function(value)
+	Config.Fuga.Enabled = value
+	if value then
+		GrabState.Text = "● Fuga: aguardando vida baixa"
+		GrabState.TextColor3 = Theme.Yellow
+	else
+		releaseFromFuga()
+		if not fugaWasActive then
+			GrabState.Text = "● Fuga desativada"
+			GrabState.TextColor3 = Theme.Muted
+		end
+	end
+end)
+create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 45),
+	Position = UDim2.fromOffset(16, 246),
+	BackgroundTransparency = 1,
+	Text = "Fuga: quando sua vida ficar baixa, o personagem desce aproximadamente -50.\nAo desativar Fuga, ele sobe aproximadamente +100 a partir da posição atual.",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = SurvivalPanel,
+})
+
+-- Settings
+pageTitle(
+	SettingsPage,
+	"Settings",
+	"Preferências visuais do hub."
+)
+
+local SettingsPanel = panel(SettingsPage, {
+	Size = UDim2.new(1, 0, 0, 340),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = SettingsPage,
+})
+
+createToggle(SettingsPanel, "ESP DE JOGADORES", 18, Config.PlayerESP, function(value)
+	Config.PlayerESP = value
+
+	for _, data in pairs(playerESP) do
+		if data.Gui then
+			data.Gui.Enabled = value
+		end
+
+		if data.Highlight then
+			data.Highlight.Enabled = value and Config.PlayerHighlights
+		end
+	end
+end)
+
+createToggle(SettingsPanel, "NOMES DOS JOGADORES", 60, Config.PlayerNames, function(value)
+	Config.PlayerNames = value
+
+	for _, data in pairs(playerESP) do
+		if data.NameLabel then
+			data.NameLabel.Visible = value
+		end
+	end
+end)
+
+createToggle(SettingsPanel, "VIDA DOS JOGADORES", 102, Config.PlayerHealth, function(value)
+	Config.PlayerHealth = value
+
+	for _, data in pairs(playerESP) do
+		if data.HealthBack then
+			data.HealthBack.Visible = value
+		end
+
+		if data.HealthText then
+			data.HealthText.Visible = value
+		end
+	end
+end)
+
+createToggle(SettingsPanel, "CONTORNO BRANCO", 144, Config.PlayerHighlights, function(value)
+	Config.PlayerHighlights = value
+
+	for _, data in pairs(playerESP) do
+		if data.Highlight and not allies[data.Player] then
+			data.Highlight.Enabled = Config.PlayerESP and value
+		end
+	end
+end)
+
+local ESPScaleLabel = create("TextLabel", {
+	Size = UDim2.fromOffset(150, 18),
+	Position = UDim2.fromOffset(16, 186),
+	BackgroundTransparency = 1,
+	Text = "TAMANHO DO ESP",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 8,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = SettingsPanel,
+})
+
+local ESPMinusButton = create("TextButton", {
+	Size = UDim2.fromOffset(34, 32),
+	Position = UDim2.fromOffset(16, 208),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "−",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 17,
+	Parent = SettingsPanel,
+})
+addCorner(ESPMinusButton, 8)
+
+local ESPScaleBox = create("TextBox", {
+	Size = UDim2.fromOffset(82, 32),
+	Position = UDim2.fromOffset(56, 208),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = string.format("%.1f", Config.PlayerESPScale),
+	PlaceholderText = "1.0",
+	TextColor3 = Theme.Text,
+	PlaceholderColor3 = Theme.Muted,
+	Font = Enum.Font.Code,
+	TextSize = 10,
+	ClearTextOnFocus = false,
+	Parent = SettingsPanel,
+})
+addCorner(ESPScaleBox, 8)
+
+local ESPPlusButton = create("TextButton", {
+	Size = UDim2.fromOffset(34, 32),
+	Position = UDim2.fromOffset(144, 208),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "+",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 17,
+	Parent = SettingsPanel,
+})
+addCorner(ESPPlusButton, 8)
+
+local ESPScaleHint = create("TextLabel", {
+	Size = UDim2.fromOffset(250, 32),
+	Position = UDim2.fromOffset(190, 208),
+	BackgroundTransparency = 1,
+	Text = "0.5 = menor   •   1.0 = normal   •   2.5 = maior",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 8,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = SettingsPanel,
+})
+
+local function applyESPScale(value)
+	value = math.clamp(tonumber(value) or Config.PlayerESPScale, Config.PlayerESPMinScale, Config.PlayerESPMaxScale)
+	value = math.round(value * 10) / 10
+	Config.PlayerESPScale = value
+	ESPScaleBox.Text = string.format("%.1f", value)
+
+	for _, data in pairs(playerESP) do
+		if data.Scale then
+			data.Scale.Scale = value
+		end
+	end
+end
+
+ESPMinusButton.Activated:Connect(function()
+	applyESPScale(Config.PlayerESPScale - 0.1)
+end)
+
+ESPPlusButton.Activated:Connect(function()
+	applyESPScale(Config.PlayerESPScale + 0.1)
+end)
+
+ESPScaleBox.FocusLost:Connect(function()
+	applyESPScale(ESPScaleBox.Text)
+end)
+
+createToggle(SettingsPanel, "REMOVER NOITE", 258, Config.RemoveNight, function(value)
+	Config.RemoveNight = value
+
+	if value then
+		if originalClockTime == nil then
+			originalClockTime = Lighting.ClockTime
+			originalBrightness = Lighting.Brightness
+		end
+
+		Lighting.ClockTime = 12
+		Lighting.Brightness = math.max(Lighting.Brightness, 2)
+	else
+		if originalClockTime ~= nil then
+			Lighting.ClockTime = originalClockTime
+			Lighting.Brightness = originalBrightness
+		end
+	end
+end)
+
+-- Player
+pageTitle(
+	PlayerPage,
+	"Player",
+	"Controle sua velocidade, pulo e modo Fly."
+)
+
+local PlayerPanel = panel(PlayerPage, {
+	Size = UDim2.new(1, 0, 0, 335),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = PlayerPage,
+})
+
+local function captureOriginalPlayerValues()
+	local humanoid = getHumanoid(LocalPlayer.Character)
+	if not humanoid then
+		return
+	end
+
+	if originalWalkSpeed == nil then
+		originalWalkSpeed = humanoid.WalkSpeed
+	end
+
+	if originalJumpPower == nil then
+		originalJumpPower = humanoid.JumpPower
+	end
+end
+
+local function playerNumericBox(labelText, y, defaultValue)
+	create("TextLabel", {
+		Size = UDim2.fromOffset(150, 18),
+		Position = UDim2.fromOffset(16, y),
+		BackgroundTransparency = 1,
+		Text = labelText,
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = PlayerPanel,
+	})
+
+	local box = create("TextBox", {
+		Size = UDim2.fromOffset(130, 34),
+		Position = UDim2.fromOffset(16, y + 21),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = tostring(defaultValue),
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.Code,
+		TextSize = 10,
+		ClearTextOnFocus = false,
+		Parent = PlayerPanel,
+	})
+	addCorner(box, 8)
+	return box
+end
+
+local function playerToggle(text, x, y, enabled, callback)
+	local button = create("TextButton", {
+		Size = UDim2.fromOffset(118, 34),
+		Position = UDim2.fromOffset(x, y),
+		BackgroundColor3 = enabled and Theme.Green or Theme.Button,
+		BorderSizePixel = 0,
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		Parent = PlayerPanel,
+	})
+	addCorner(button, 8)
+
+	local state = enabled
+	local function refresh()
+		button.Text = (state and "●  " or "○  ") .. text
+		button.BackgroundColor3 = state and Theme.Green or Theme.Button
+	end
+
+	button.Activated:Connect(function()
+		state = not state
+		refresh()
+		callback(state)
+	end)
+
+	refresh()
+	return button
+end
+
+playerControls.WalkSpeed = playerNumericBox("VELOCIDADE", 18, Config.Player.WalkSpeed)
+playerControls.JumpPower = playerNumericBox("PULO", 80, Config.Player.JumpPower)
+playerControls.FlySpeed = playerNumericBox("VELOCIDADE DO FLY", 142, Config.Player.FlySpeed)
+
+local WalkSpeedToggle
+local JumpPowerToggle
+
+local function applyPlayerValues()
+	captureOriginalPlayerValues()
+
+	Config.Player.WalkSpeed = math.max(0, tonumber(playerControls.WalkSpeed.Text) or Config.Player.WalkSpeed)
+	Config.Player.JumpPower = math.max(0, tonumber(playerControls.JumpPower.Text) or Config.Player.JumpPower)
+	Config.Player.FlySpeed = math.max(0, tonumber(playerControls.FlySpeed.Text) or Config.Player.FlySpeed)
+
+	playerControls.WalkSpeed.Text = tostring(Config.Player.WalkSpeed)
+	playerControls.JumpPower.Text = tostring(Config.Player.JumpPower)
+	playerControls.FlySpeed.Text = tostring(Config.Player.FlySpeed)
+
+	local humanoid = getHumanoid(LocalPlayer.Character)
+	if humanoid then
+		if Config.Player.WalkSpeedEnabled then
+			humanoid.WalkSpeed = Config.Player.WalkSpeed
+		elseif originalWalkSpeed ~= nil then
+			humanoid.WalkSpeed = originalWalkSpeed
+		end
+
+		pcall(function() humanoid.UseJumpPower = true end)
+
+		if Config.Player.JumpPowerEnabled then
+			humanoid.JumpPower = Config.Player.JumpPower
+		elseif originalJumpPower ~= nil then
+			humanoid.JumpPower = originalJumpPower
+		end
+	end
+end
+
+WalkSpeedToggle = playerToggle("VELOCIDADE", 160, 18, Config.Player.WalkSpeedEnabled, function(value)
+	Config.Player.WalkSpeedEnabled = value
+	applyPlayerValues()
+end)
+
+JumpPowerToggle = playerToggle("PULO", 160, 80, Config.Player.JumpPowerEnabled, function(value)
+	Config.Player.JumpPowerEnabled = value
+	applyPlayerValues()
+end)
+
+for _, box in pairs(playerControls) do
+	box.FocusLost:Connect(applyPlayerValues)
+end
+
+createToggle(PlayerPanel, "FLY", 204, Config.Player.Fly, function(value)
+	Config.Player.Fly = value
+	if not value then
+		local root = getRoot(LocalPlayer.Character)
+		if root then
+			root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
+		end
+	end
+end)
+
+create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 70),
+	Position = UDim2.fromOffset(16, 253),
+	BackgroundTransparency = 1,
+	Text = "Velocidade e Pulo podem ser ligados/desligados separadamente.\nFly usa o movimento normal do personagem e a câmera para orientar o deslocamento.",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = PlayerPanel,
+})
+
+-- Logs
+pageTitle(
+	LogsPage,
+	"Grab Log",
+	"Eventos observados pelo detector Anti-Grab."
+)
+
+local LogsPanel = panel(LogsPage, {
+	Size = UDim2.new(1, 0, 1, -62),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = LogsPage,
+})
+
+local ClearLogsButton = create("TextButton", {
+	Size = UDim2.fromOffset(120, 34),
+	Position = UDim2.fromOffset(14, 14),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "LIMPAR LOG",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	Parent = LogsPanel,
+})
+
+addCorner(ClearLogsButton, 9)
+
+local LogList = create("ScrollingFrame", {
+	Size = UDim2.new(1, -28, 1, -66),
+	Position = UDim2.fromOffset(14, 58),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 5,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	Parent = LogsPanel,
+})
+
+addCorner(LogList, 10)
+
+create("UIPadding", {
+	PaddingTop = UDim.new(0, 8),
+	PaddingBottom = UDim.new(0, 8),
+	PaddingLeft = UDim.new(0, 8),
+	PaddingRight = UDim.new(0, 8),
+	Parent = LogList,
+})
+
+create("UIListLayout", {
+	Padding = UDim.new(0, 3),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Parent = LogList,
+})
+
+local function addVisualLog(eventName, details, color)
+	local message = "[" .. eventName .. "]"
+
+	if details and details.Message then
+		message = message .. " " .. tostring(details.Message)
+	end
+
+	local label = create("TextLabel", {
+		Size = UDim2.new(1, -4, 0, 22),
+		BackgroundTransparency = 1,
+		Text = message,
+		TextColor3 = color or Theme.Text,
+		Font = Enum.Font.Code,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = LogList,
+	})
+
+	table.insert(logEntries, {
+		Event = eventName,
+		Details = details or {},
+		Label = label,
+	})
+end
+
+local function clearLogs()
+	for _, entry in ipairs(logEntries) do
+		if entry.Label and entry.Label.Parent then
+			entry.Label:Destroy()
+		end
+	end
+
+	table.clear(logEntries)
+	addVisualLog("LOG", {
+		Message = "Log limpo.",
+	}, Theme.Muted)
+end
+
+ClearLogsButton.Activated:Connect(clearLogs)
+
+-- ESP de jogadores
 local function removePlayerESP(player)
-    local data = playerESP[player]
-    if data then
-        if data.Gui then data.Gui:Destroy() end
-        if data.Highlight then data.Highlight:Destroy() end
-        playerESP[player] = nil
-    end
-    if playerESPConnections[player] then
-        for _, connection in pairs(playerESPConnections[player]) do pcall(function() connection:Disconnect() end) end
-        playerESPConnections[player] = nil
-    end
+	local data = playerESP[player]
+
+	if data then
+		if data.Gui then
+			data.Gui:Destroy()
+		end
+
+		if data.Highlight then
+			data.Highlight:Destroy()
+		end
+
+		playerESP[player] = nil
+	end
+
+	if characterConnections[player] then
+		for _, connection in ipairs(characterConnections[player]) do
+			if connection and connection.Connected then
+				connection:Disconnect()
+			end
+		end
+
+		characterConnections[player] = nil
+	end
 end
 
 local function updatePlayerESP(player)
-    local data = playerESP[player]
-    if not data then return end
-    local humanoid = data.Humanoid
-    if not humanoid or not humanoid.Parent then removePlayerESP(player) return end
-    local maxHealth = math.max(humanoid.MaxHealth, 1)
-    local current = math.clamp(humanoid.Health, 0, maxHealth)
-    local percent = current / maxHealth
-    data.Icon.Text = getDinosaurIcon(player, humanoid.Parent)
-    data.NameLabel.Text = player.DisplayName
-    data.HealthText.Text = string.format("%d / %d", math.floor(current + 0.5), math.floor(maxHealth + 0.5))
-    data.HealthBar.Size = UDim2.new(percent, 0, 1, 0)
-    data.HealthBar.BackgroundColor3 = healthColor(percent)
-    data.Gui.Enabled = CONFIG.PlayerESP
-    data.NameLabel.Visible = CONFIG.PlayerNames
-    data.HealthBack.Visible = CONFIG.HealthESP
-    data.HealthText.Visible = CONFIG.HealthESP
-    if data.Highlight then data.Highlight.Enabled = CONFIG.PlayerESP end
+	local data = playerESP[player]
+
+	if not data then
+		return
+	end
+
+	local character = player.Character
+	local humanoid = getHumanoid(character)
+
+	if not character or not humanoid or not humanoid.Parent then
+		removePlayerESP(player)
+		return
+	end
+
+	local maxHealth = math.max(humanoid.MaxHealth, 1)
+	local health = math.clamp(humanoid.Health, 0, maxHealth)
+	local percent = health / maxHealth
+	local color = healthColor(percent)
+	local ally = allies[player] == true
+
+	data.Icon.Text = Config.PlayerIcons and getPlayerIcon(player) or ""
+	data.NameLabel.Text = player.DisplayName
+	data.HealthText.Text = string.format(
+		"%d / %d",
+		math.floor(health + 0.5),
+		math.floor(maxHealth + 0.5)
+	)
+
+	data.HealthFill.Size = UDim2.new(percent, 0, 1, 0)
+	data.HealthFill.BackgroundColor3 = color
+	data.HealthBack.Visible = Config.PlayerHealth
+	data.HealthText.Visible = Config.PlayerHealth
+	data.NameLabel.Visible = Config.PlayerNames
+	data.Icon.Visible = Config.PlayerIcons
+	data.Gui.Enabled = Config.PlayerESP
+
+	if data.Highlight then
+		data.Highlight.Enabled = Config.PlayerESP and Config.PlayerHighlights
+		data.Highlight.OutlineColor = ally
+			and Theme.Green
+			or Theme.WhiteOutline
+		data.Highlight.FillColor = ally
+			and Color3.fromRGB(45, 190, 105)
+			or Theme.Blue
+	end
+
+	if isLowHealth(humanoid) then
+		data.LowHealth.Visible = true
+		data.LowHealth.Text = "LOW"
+		data.LowHealth.TextColor3 = Theme.Red
+	else
+		data.LowHealth.Visible = false
+	end
 end
 
-local function createPlayerESP(player, character)
-    if player == LocalPlayer or not character then return end
-    removePlayerESP(player)
-    local humanoid = getHumanoid(character)
-    local adornee = getAdornee(character)
-    if not humanoid or not adornee then return end
+local function createPlayerESP(player)
+	if player == LocalPlayer then
+		return
+	end
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "DinosaurPlayerPanel"
-    billboard.Adornee = adornee
-    billboard.Size = UDim2.fromOffset(210, 58)
-    billboard.StudsOffset = Vector3.new(0, 3.2, 0)
-    billboard.AlwaysOnTop = true
-    billboard.MaxDistance = CONFIG.BillboardMaxDistance
-    billboard.Enabled = CONFIG.PlayerESP
-    billboard.Parent = PlayerGui
+	removePlayerESP(player)
 
-    -- Painel visual removido: ícone, nome e vida ficam diretamente sobre o jogo.
-    local panel = Instance.new("Frame")
-    panel.Size = UDim2.fromScale(1, 1)
-    panel.BackgroundTransparency = 1
-    panel.BorderSizePixel = 0
-    panel.Parent = billboard
+	local character = player.Character
+	local humanoid = getHumanoid(character)
+	local adornee = getAdornee(character)
 
-    local icon = Instance.new("TextLabel")
-    icon.Size = UDim2.fromOffset(36, 36)
-    icon.Position = UDim2.fromOffset(7, 7)
-    icon.BackgroundTransparency = 1
-    icon.Text = getDinosaurIcon(player, character)
-    icon.TextColor3 = Color3.new(1, 1, 1)
-    icon.Font = Enum.Font.GothamBold
-    icon.TextSize = 22
-    icon.TextXAlignment = Enum.TextXAlignment.Center
-    icon.TextYAlignment = Enum.TextYAlignment.Center
-    icon.Parent = panel
+	if not character or not humanoid or not adornee then
+		return
+	end
 
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, -52, 0, 18)
-    nameLabel.Position = UDim2.fromOffset(48, 5)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = player.DisplayName
-    nameLabel.TextColor3 = CONFIG.Theme.Text
-    nameLabel.TextStrokeTransparency = 0.35
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 10
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameLabel.Parent = panel
+	local billboard = create("BillboardGui", {
+		Name = "EspHub",
+		Adornee = adornee,
+		Size = UDim2.fromOffset(245, 76),
+		StudsOffset = Vector3.new(0, 3.6, 0),
+		AlwaysOnTop = true,
+		MaxDistance = Config.MaxDistance,
+		LightInfluence = 0,
+		Parent = PlayerGui,
+	})
 
-    local healthBack = Instance.new("Frame")
-    healthBack.Size = UDim2.new(1, -58, 0, 10)
-    healthBack.Position = UDim2.fromOffset(50, 29)
-    healthBack.BackgroundColor3 = CONFIG.Theme.HealthBack
-    healthBack.BackgroundTransparency = 1
-    healthBack.BorderSizePixel = 0
-    healthBack.Parent = panel
-    corner(healthBack, 5)
+	local frame = create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = billboard,
+	})
 
-    local healthBar = Instance.new("Frame")
-    healthBar.Size = UDim2.fromScale(1, 1)
-    healthBar.BackgroundColor3 = Color3.fromRGB(70, 220, 105)
-    healthBar.BorderSizePixel = 0
-    healthBar.Parent = healthBack
-    corner(healthBar, 5)
+	local espScale = Instance.new("UIScale")
+	espScale.Scale = Config.PlayerESPScale
+	espScale.Parent = frame
 
-    local healthText = Instance.new("TextLabel")
-    healthText.Size = UDim2.new(1, -58, 0, 14)
-    healthText.Position = UDim2.fromOffset(50, 41)
-    healthText.BackgroundTransparency = 1
-    healthText.Text = "100 / 100"
-    healthText.TextColor3 = CONFIG.Theme.Muted
-    healthText.Font = Enum.Font.GothamMedium
-    healthText.TextSize = 8
-    healthText.TextXAlignment = Enum.TextXAlignment.Left
-    healthText.Parent = panel
+	local icon = create("TextLabel", {
+		Size = UDim2.fromOffset(45, 45),
+		Position = UDim2.fromOffset(8, 14),
+		BackgroundTransparency = 1,
+		Text = getPlayerIcon(player),
+		TextColor3 = Theme.Text,
+		TextStrokeColor3 = Color3.new(0, 0, 0),
+		TextStrokeTransparency = 0.1,
+		Font = Enum.Font.GothamBold,
+		TextSize = 29,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Parent = frame,
+	})
 
-    local highlight
-    if CONFIG.PlayerESP then
-        highlight = Instance.new("Highlight")
-        highlight.Name = "DinosaurPlayerHighlight"
-        highlight.Adornee = character
-        highlight.FillColor = CONFIG.Theme.PrimaryBlue
-        highlight.OutlineColor = Color3.new(1, 1, 1)
-        highlight.FillTransparency = 0.9
-        highlight.OutlineTransparency = 0.25
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = character
-    end
+	local nameLabel = create("TextLabel", {
+		Size = UDim2.new(1, -72, 0, 20),
+		Position = UDim2.fromOffset(62, 7),
+		BackgroundTransparency = 1,
+		Text = player.DisplayName,
+		TextColor3 = Theme.Text,
+		TextStrokeColor3 = Color3.new(0, 0, 0),
+		TextStrokeTransparency = 0.15,
+		Font = Enum.Font.GothamBold,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = frame,
+	})
 
-    playerESP[player] = {Gui = billboard, Icon = icon, NameLabel = nameLabel, HealthBack = healthBack, HealthBar = healthBar, HealthText = healthText, Humanoid = humanoid, Highlight = highlight}
-    playerESPConnections[player] = {
-        humanoid.HealthChanged:Connect(function() updatePlayerESP(player) end),
-        character.AncestryChanged:Connect(function(_, parent) if not parent then removePlayerESP(player) end end),
-    }
-    updatePlayerESP(player)
+	local lowHealth = create("TextLabel", {
+		Size = UDim2.fromOffset(40, 18),
+		Position = UDim2.new(1, -51, 0, 7),
+		BackgroundTransparency = 1,
+		Text = "",
+		TextColor3 = Theme.Red,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Visible = false,
+		Parent = frame,
+	})
+
+	local healthBack = create("Frame", {
+		Size = UDim2.new(1, -77, 0, 12),
+		Position = UDim2.fromOffset(65, 34),
+		BackgroundColor3 = Theme.HealthBack,
+		BorderSizePixel = 0,
+		Parent = frame,
+	})
+
+	addCorner(healthBack, 6)
+
+	local healthFill = create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Green,
+		BorderSizePixel = 0,
+		Parent = healthBack,
+	})
+
+	addCorner(healthFill, 6)
+
+	local healthText = create("TextLabel", {
+		Size = UDim2.new(1, -77, 0, 17),
+		Position = UDim2.fromOffset(65, 50),
+		BackgroundTransparency = 1,
+		Text = "100 / 100",
+		TextColor3 = Theme.Muted,
+		TextStrokeColor3 = Color3.new(0, 0, 0),
+		TextStrokeTransparency = 0.2,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 9,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = frame,
+	})
+
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "EspHubHighlight"
+	highlight.Adornee = character
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.FillTransparency = 0.9
+	highlight.OutlineTransparency = 0.05
+	highlight.OutlineColor = Theme.WhiteOutline
+	highlight.Parent = character
+
+	playerESP[player] = {
+		Player = player,
+		Gui = billboard,
+		Icon = icon,
+		NameLabel = nameLabel,
+		HealthBack = healthBack,
+		HealthFill = healthFill,
+		HealthText = healthText,
+		LowHealth = lowHealth,
+		Highlight = highlight,
+		Scale = espScale,
+	}
+
+	characterConnections[player] = {
+		humanoid.HealthChanged:Connect(function()
+			updatePlayerESP(player)
+		end),
+
+		character.AncestryChanged:Connect(function(_, parent)
+			if not parent then
+				removePlayerESP(player)
+			end
+		end),
+	}
+
+	updatePlayerESP(player)
 end
 
-local function setupPlayerESP(player)
-    if player == LocalPlayer then return end
-    if player.Character then task.defer(function() if player.Parent == Players then createPlayerESP(player, player.Character) end end) end
-    player.CharacterAdded:Connect(function(character)
-        task.wait(0.2)
-        if player.Parent == Players then
-            createPlayerESP(player, character)
-            if selectedPlayer == player then updateTargetHighlight() end
-        end
-    end)
+local function refreshPlayerESP()
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			if player.Character then
+				createPlayerESP(player)
+			end
+		end
+	end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do setupPlayerESP(player) end
-Players.PlayerAdded:Connect(setupPlayerESP)
-Players.PlayerRemoving:Connect(function(player)
-    removePlayerESP(player)
-    if playerButtons[player] then playerButtons[player]:Destroy() end
-    playerButtons[player] = nil
-    if selectedPlayer == player then
-        selectedPlayer = nil
-        removeTargetHighlight()
-        TargetLabel.Text = "Nenhum jogador selecionado"
-    end
-end)
+local function worldObjectType(object)
+	local name = string.lower(object.Name)
 
-local corpseWords = {"corpse", "dead", "body", "carcass", "cadaver", "morto", "corpo"}
-local meatWords = {"meat", "steak", "rawmeat", "raw_meat", "carne", "bife", "food", "fooditem"}
+	if CollectionService:HasTag(object, "DinosaurCorpse")
+		or string.find(name, "corpse", 1, true)
+		or string.find(name, "carcass", 1, true)
+		or string.find(name, "cadaver", 1, true)
+		or string.find(name, "dead", 1, true)
+	then
+		return "Corpse"
+	end
 
-local function containsWord(name, words)
-    local lower = string.lower(tostring(name))
-    for _, word in ipairs(words) do
-        if string.find(lower, word, 1, true) then return true end
-    end
-    return false
+	if CollectionService:HasTag(object, "DinosaurMeat")
+		or string.find(name, "meat", 1, true)
+		or string.find(name, "steak", 1, true)
+		or string.find(name, "carne", 1, true)
+	then
+		return "Meat"
+	end
+
+	if CollectionService:HasTag(object, "DinosaurFood")
+		or string.find(name, "food", 1, true)
+		or string.find(name, "berry", 1, true)
+		or string.find(name, "fruit", 1, true)
+		or string.find(name, "comida", 1, true)
+	then
+		return "Food"
+	end
+
+	if CollectionService:HasTag(object, "DinosaurBone")
+		or string.find(name, "bone", 1, true)
+		or string.find(name, "osso", 1, true)
+	then
+		return "Bone"
+	end
+
+	return nil
 end
 
 local function worldAdornee(object)
-    if object:IsA("BasePart") then return object end
-    if object:IsA("Model") then return object.PrimaryPart or object:FindFirstChildWhichIsA("BasePart", true) end
-    return nil
+	if object:IsA("BasePart") then
+		return object
+	end
+
+	if object:IsA("Model") then
+		return object.PrimaryPart
+			or object:FindFirstChildWhichIsA("BasePart", true)
+	end
+
+	return nil
 end
 
-local function isCorpse(object)
-    if not object:IsA("Model") then return false end
-    if CollectionService:HasTag(object, "DinosaurCorpse") then return true end
-    local humanoid = object:FindFirstChildOfClass("Humanoid")
-    if humanoid and humanoid.Health <= 0 then return true end
-    return containsWord(object.Name, corpseWords)
+local function worldIcon(objectType)
+	if objectType == "Meat" then
+		return "🥩"
+	elseif objectType == "Food" then
+		return "🍖"
+	elseif objectType == "Bone" or objectType == "Corpse" then
+		return "🦴"
+	end
+
+	return "?"
 end
 
-local function isMeat(object)
-    if CollectionService:HasTag(object, "DinosaurMeat") then return true end
-    if object:IsA("Model") or object:IsA("BasePart") then return containsWord(object.Name, meatWords) end
-    return false
+local function shouldShowWorldType(objectType)
+	if objectType == "Meat" then
+		return Config.MeatESP
+	elseif objectType == "Food" then
+		return Config.FoodESP
+	elseif objectType == "Bone" then
+		return Config.BoneESP
+	elseif objectType == "Corpse" then
+		return Config.CorpseESP
+	end
+
+	return false
 end
 
-local function removeWorldIcon(container, object)
-    local data = container[object]
-    if data then
-        if data.Gui then data.Gui:Destroy() end
-        container[object] = nil
-    end
+local function removeWorldESP(object)
+	local data = worldESP[object]
+
+	if data then
+		if data.Gui then
+			data.Gui:Destroy()
+		end
+
+		worldESP[object] = nil
+	end
 end
 
-local function createWorldIcon(container, object, icon, color)
-    if container[object] then return end
-    local adornee = worldAdornee(object)
-    if not adornee then return end
+local function createWorldESP(object, objectType)
+	if not objectType or not shouldShowWorldType(objectType) then
+		return
+	end
 
-    local gui = Instance.new("BillboardGui")
-    gui.Name = icon == "🦴" and "DinosaurCorpseIcon" or "DinosaurMeatIcon"
-    gui.Adornee = adornee
-    gui.Size = UDim2.fromOffset(42, 42)
-    gui.StudsOffset = Vector3.new(0, 2.5, 0)
-    gui.AlwaysOnTop = true
-    gui.MaxDistance = CONFIG.BillboardMaxDistance
-    gui.Parent = PlayerGui
+	local adornee = worldAdornee(object)
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.fromScale(1, 1)
-    label.BackgroundTransparency = 1
-    label.Text = icon
-    label.TextColor3 = color
-    label.TextStrokeTransparency = 0.15
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 27
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.TextYAlignment = Enum.TextYAlignment.Center
-    label.Parent = gui
+	if not adornee then
+		return
+	end
 
-    container[object] = {Gui = gui}
-    object.AncestryChanged:Connect(function(_, parent) if not parent then removeWorldIcon(container, object) end end)
+	removeWorldESP(object)
+
+	local gui = create("BillboardGui", {
+		Name = "WorldESP_" .. objectType,
+		Adornee = adornee,
+		Size = UDim2.fromOffset(62, 62),
+		StudsOffset = Vector3.new(0, 2.8, 0),
+		AlwaysOnTop = true,
+		MaxDistance = Config.MaxDistance,
+		LightInfluence = 0,
+		Parent = PlayerGui,
+	})
+
+	local iconFrame = create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(12, 16, 23),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		Parent = gui,
+	})
+
+	addCorner(iconFrame, 17)
+	addStroke(iconFrame, Theme.RedOutline, 2, 0)
+
+	local icon = create("TextLabel", {
+		Size = UDim2.new(1, -8, 1, -8),
+		Position = UDim2.fromOffset(4, 4),
+		BackgroundTransparency = 1,
+		Text = worldIcon(objectType),
+		TextColor3 = objectType == "Food"
+			and Color3.fromRGB(255, 190, 95)
+			or Color3.fromRGB(255, 235, 210),
+		TextStrokeColor3 = Theme.RedOutline,
+		TextStrokeTransparency = 0,
+		Font = Enum.Font.GothamBold,
+		TextSize = 33,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Parent = iconFrame,
+	})
+
+	worldESP[object] = {
+		Gui = gui,
+		Type = objectType,
+	}
+
+	object.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			removeWorldESP(object)
+		end
+	end)
 end
 
-local function scanWorld()
-    if not running then return end
-    for _, object in ipairs(workspace:GetDescendants()) do
-        if CONFIG.CorpseESP and object:IsA("Model") and isCorpse(object) then
-            createWorldIcon(corpseESP, object, "🦴", Color3.fromRGB(255, 245, 215))
-        elseif CONFIG.MeatESP and (object:IsA("Model") or object:IsA("BasePart")) and isMeat(object) then
-            createWorldIcon(meatESP, object, "🥩", Color3.fromRGB(255, 145, 110))
-        end
-    end
+local function refreshWorldESP()
+	worldScanVersion += 1
+	local scanVersion = worldScanVersion
+
+	for object in pairs(worldESP) do
+		removeWorldESP(object)
+	end
+
+	local count = 0
+
+	for _, object in ipairs(workspace:GetDescendants()) do
+		if scanVersion ~= worldScanVersion then
+			return
+		end
+
+		local objectType = worldObjectType(object)
+
+		if objectType then
+			createWorldESP(object, objectType)
+			count += 1
+		end
+	end
+
+	WorldStatus.Text = "Objetos encontrados: " .. tostring(count)
 end
+
+local function refreshAll()
+	refreshPlayerESP()
+	refreshWorldESP()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if playerEntries[player] then
+			playerEntries[player].Update()
+		end
+	end
+
+	addVisualLog("REFRESH", {
+		Message = "Jogadores, ESP e objetos atualizados.",
+	}, Theme.Blue)
+end
+
+-- Lista de players
+local function clearPlayerList()
+	for player, data in pairs(playerEntries) do
+		if data.Button and data.Button.Parent then
+			data.Button:Destroy()
+		end
+
+		playerEntries[player] = nil
+	end
+end
+
+local function sortedPlayers()
+	local list = {}
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			table.insert(list, player)
+		end
+	end
+
+	table.sort(list, function(a, b)
+		return getDistance(a) < getDistance(b)
+	end)
+
+	return list
+end
+
+local function addAlly(player)
+	allies[player] = true
+
+	if playerESP[player] then
+		updatePlayerESP(player)
+	end
+
+	addVisualLog("ALLY_ADDED", {
+		Message = player.DisplayName .. " adicionado como aliado.",
+	}, Theme.Green)
+end
+
+local function removeAlly(player)
+	allies[player] = nil
+
+	if playerESP[player] then
+		updatePlayerESP(player)
+	end
+
+	addVisualLog("ALLY_REMOVED", {
+		Message = player.DisplayName .. " removido dos aliados.",
+	}, Theme.Yellow)
+end
+
+local function createPlayerEntry(player)
+	local button = create("TextButton", {
+		Size = UDim2.new(1, 0, 0, 58),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = "",
+		Parent = PlayerList,
+	})
+
+	addCorner(button, 10)
+
+	local icon = create("TextLabel", {
+		Size = UDim2.fromOffset(36, 36),
+		Position = UDim2.fromOffset(8, 11),
+		BackgroundTransparency = 1,
+		Text = getPlayerIcon(player),
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 25,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Parent = button,
+	})
+
+	local name = create("TextLabel", {
+		Size = UDim2.new(1, -215, 0, 21),
+		Position = UDim2.fromOffset(51, 7),
+		BackgroundTransparency = 1,
+		Text = player.DisplayName,
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = button,
+	})
+
+	local distanceLabel = create("TextLabel", {
+		Size = UDim2.new(1, -215, 0, 17),
+		Position = UDim2.fromOffset(51, 29),
+		BackgroundTransparency = 1,
+		Text = "Distância: --",
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 8,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = button,
+	})
+
+	local selectButton = create("TextButton", {
+		Size = UDim2.fromOffset(72, 27),
+		Position = UDim2.new(1, -162, 0, 16),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = "SELECIONAR",
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		Parent = button,
+	})
+
+	addCorner(selectButton, 7)
+
+	local allyButton = create("TextButton", {
+		Size = UDim2.fromOffset(72, 27),
+		Position = UDim2.new(1, -82, 0, 16),
+		BackgroundColor3 = Theme.ButtonHover,
+		BorderSizePixel = 0,
+		Text = "ALIADO",
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		Parent = button,
+	})
+
+	addCorner(allyButton, 7)
+
+	local function update()
+		icon.Text = getPlayerIcon(player)
+		name.Text = player.DisplayName
+		distanceLabel.Text = "Distância: " .. formatDistance(getDistance(player))
+
+		if allies[player] then
+			allyButton.Text = "ALIADO ✓"
+			allyButton.BackgroundColor3 = Theme.Green
+		else
+			allyButton.Text = "ALIADO"
+			allyButton.BackgroundColor3 = Theme.ButtonHover
+		end
+
+		if selectedPlayer == player then
+			selectButton.Text = "SELECIONADO ✓"
+			selectButton.BackgroundColor3 = Theme.Blue
+		else
+			selectButton.Text = "SELECIONAR"
+			selectButton.BackgroundColor3 = Theme.Button
+		end
+
+		button.Visible =
+			string.find(
+				string.lower(player.DisplayName),
+				string.lower(SearchBox.Text or ""),
+				1,
+				true
+			) ~= nil
+			or string.find(
+				string.lower(player.Name),
+				string.lower(SearchBox.Text or ""),
+				1,
+				true
+			) ~= nil
+	end
+
+	button.Activated:Connect(function()
+		selectedPlayer = player
+
+		for otherPlayer, data in pairs(playerEntries) do
+			if data.Button then
+				data.Button.BackgroundColor3 =
+					otherPlayer == player
+					and Theme.Blue
+					or Theme.Button
+			end
+		end
+
+		addVisualLog("PLAYER_SELECTED", {
+			Message = player.DisplayName .. " selecionado.",
+		}, Theme.Blue)
+	end)
+
+	selectButton.Activated:Connect(function()
+		selectedPlayer = player
+
+		for otherPlayer, data in pairs(playerEntries) do
+			if data.Update then
+				data.Update()
+			end
+		end
+
+		addVisualLog("PLAYER_SELECTED", {
+			Message = player.DisplayName .. " definido como alvo do PvP.",
+		}, Theme.Blue)
+	end)
+
+	allyButton.Activated:Connect(function()
+		if allies[player] then
+			removeAlly(player)
+		else
+			addAlly(player)
+		end
+
+		update()
+	end)
+
+	button.MouseEnter:Connect(function()
+		if selectedPlayer ~= player then
+			tween(button, {
+				BackgroundColor3 = Theme.ButtonHover,
+			}, 0.15)
+		end
+	end)
+
+	button.MouseLeave:Connect(function()
+		if selectedPlayer ~= player then
+			tween(button, {
+				BackgroundColor3 = Theme.Button,
+			}, 0.15)
+		end
+	end)
+
+	playerEntries[player] = {
+		Button = button,
+		Update = update,
+		SelectButton = selectButton,
+	}
+
+	update()
+end
+
+local function refreshPlayerList()
+	clearPlayerList()
+
+	local list = sortedPlayers()
+
+	for _, player in ipairs(list) do
+		createPlayerEntry(player)
+	end
+
+	PlayerCountLabel.Text = tostring(#list) .. " jogadores"
+end
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	for _, data in pairs(playerEntries) do
+		data.Update()
+	end
+end)
+
+RefreshPlayersButton.Activated:Connect(function()
+	refreshPlayerList()
+	refreshPlayerESP()
+
+	addVisualLog("PLAYERS_REFRESHED", {
+		Message = "Lista e ESP de jogadores atualizados.",
+	}, Theme.Blue)
+end)
+
+WorldRefreshButton.Activated:Connect(function()
+	refreshWorldESP()
+end)
+
+-- Espectador
+local function stopSpectating()
+	local camera = workspace.CurrentCamera
+
+	if originalCameraSubject then
+		camera.CameraSubject = originalCameraSubject
+	end
+
+	if originalCameraType then
+		camera.CameraType = originalCameraType
+	end
+
+	originalCameraSubject = nil
+	originalCameraType = nil
+	spectating = false
+
+	Status.Text = "● ONLINE"
+	Status.BackgroundColor3 = Color3.fromRGB(30, 90, 58)
+	Status.TextColor3 = Color3.fromRGB(165, 255, 190)
+end
+
+local function spectateSelected()
+	if not selectedPlayer then
+		return
+	end
+
+	if spectating then
+		stopSpectating()
+		return
+	end
+
+	local humanoid = getHumanoid(selectedPlayer.Character)
+
+	if not humanoid then
+		return
+	end
+
+	local camera = workspace.CurrentCamera
+
+	originalCameraSubject = camera.CameraSubject
+	originalCameraType = camera.CameraType
+
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = humanoid
+	spectating = true
+
+	Status.Text = "● SPECTATE"
+	Status.BackgroundColor3 = Theme.Purple
+	Status.TextColor3 = Theme.Text
+end
+
+local SpectateButton = create("TextButton", {
+	Size = UDim2.fromOffset(145, 36),
+	Position = UDim2.new(1, -160, 0, 18),
+	BackgroundColor3 = Theme.Purple,
+	BorderSizePixel = 0,
+	Text = "◌  ESPECTAR",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	Parent = PlayersPanel,
+})
+
+addCorner(SpectateButton, 9)
+
+SpectateButton.Activated:Connect(spectateSelected)
+
+-- Atualização geral e saúde
+local function updateLocalHealth()
+	local character = LocalPlayer.Character
+	local humanoid = getHumanoid(character)
+
+	if not humanoid then
+		return
+	end
+
+	local maxHealth = math.max(humanoid.MaxHealth, 1)
+	local health = math.clamp(humanoid.Health, 0, maxHealth)
+	local percent = health / maxHealth
+	local color = healthColor(percent)
+
+	LocalHealthFill.Size = UDim2.new(percent, 0, 1, 0)
+	LocalHealthFill.BackgroundColor3 = color
+
+	LocalHealthText.Text = string.format(
+		"%d / %d",
+		math.floor(health + 0.5),
+		math.floor(maxHealth + 0.5)
+	)
+
+	if Config.AntiGrab then
+		if isCarried() then
+			GrabState.Text = "● MovementState: Carried"
+			GrabState.TextColor3 = Theme.Red
+		else
+			GrabState.Text = "● MovementState: normal"
+			GrabState.TextColor3 = Theme.Muted
+		end
+	end
+end
+
+local function updateHomeStats()
+	local playerCount = #Players:GetPlayers()
+	local worldCount = 0
+
+	for _ in pairs(worldESP) do
+		worldCount += 1
+	end
+
+	HomeStats.Text = string.format(
+		"PLAYERS ONLINE     %d\nWORLD OBJECTS      %d\nALLIES              %d\nSELECTED TARGET     %s\n\nESP STATUS          %s",
+		playerCount,
+		worldCount,
+		(function()
+			local count = 0
+
+			for _ in pairs(allies) do
+				count += 1
+			end
+
+			return count
+		end)(),
+		selectedPlayer and selectedPlayer.DisplayName or "Nenhum",
+		Config.PlayerESP and "ATIVO" or "DESATIVADO"
+	)
+end
+
+-- PvP
+pageTitle(
+	PvPPage,
+	"PvP",
+	"Movimentação de teste em torno do jogador selecionado."
+)
+
+local PvPPanel = panel(PvPPage, {
+	Size = UDim2.new(1, 0, 1, -62),
+	Position = UDim2.fromOffset(0, 62),
+	BackgroundColor3 = Theme.Panel,
+	BorderSizePixel = 0,
+	Parent = PvPPage,
+})
+
+local PvPStatus = create("TextLabel", {
+	Size = UDim2.new(1, -175, 0, 34),
+	Position = UDim2.fromOffset(16, 14),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	Text = "● DESATIVADO  •  Alvo: Nenhum",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = PvPPanel,
+})
+
+addCorner(PvPStatus, 8)
+
+local PvPEnable = create("TextButton", {
+	Size = UDim2.fromOffset(125, 34),
+	Position = UDim2.new(1, -141, 0, 14),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "●  ATIVAR",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	Parent = PvPPanel,
+})
+
+addCorner(PvPEnable, 8)
+
+local function numericBox(parent, labelText, x, defaultValue)
+	local label = create("TextLabel", {
+		Size = UDim2.fromOffset(82, 18),
+		Position = UDim2.fromOffset(x, 64),
+		BackgroundTransparency = 1,
+		Text = labelText,
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamBold,
+		TextSize = 8,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	})
+
+	local box = create("TextBox", {
+		Size = UDim2.fromOffset(82, 32),
+		Position = UDim2.fromOffset(x, 84),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = tostring(defaultValue),
+		PlaceholderText = tostring(defaultValue),
+		TextColor3 = Theme.Text,
+		PlaceholderColor3 = Theme.Muted,
+		Font = Enum.Font.Code,
+		TextSize = 10,
+		ClearTextOnFocus = false,
+		Parent = parent,
+	})
+
+	addCorner(box, 8)
+
+	box.FocusLost:Connect(function()
+		local value = tonumber(box.Text)
+		if value == nil then
+			box.Text = tostring(defaultValue)
+			return
+		end
+
+		box.Text = tostring(value)
+	end)
+
+	return box
+end
+
+local PvPModeFrame = create("Frame", {
+	Size = UDim2.new(1, -32, 0, 42),
+	Position = UDim2.fromOffset(16, 58),
+	BackgroundTransparency = 1,
+	Parent = PvPPanel,
+})
+
+local function createPvPModeButton(name, text, x)
+	local button = create("TextButton", {
+		Name = name,
+		Size = UDim2.fromOffset(112, 34),
+		Position = UDim2.fromOffset(x, 0),
+		BackgroundColor3 = Theme.Button,
+		BorderSizePixel = 0,
+		Text = text,
+		TextColor3 = Theme.Muted,
+		Font = Enum.Font.GothamBold,
+		TextSize = 9,
+		Parent = PvPModeFrame,
+	})
+
+	addCorner(button, 8)
+	pvpModeButtons[name] = button
+	return button
+end
+
+local MatarV1Button = createPvPModeButton("MatarV1", "MATAR V1", 0)
+local MatarV2Button = createPvPModeButton("MatarV2", "MATAR V2", 120)
+local MatarV3Button = createPvPModeButton("MatarV3", "MATAR V3", 240)
+
+local PvPValuesPanel = panel(PvPPanel, {
+	Size = UDim2.new(1, -32, 0, 145),
+	Position = UDim2.fromOffset(16, 111),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	Parent = PvPPanel,
+})
+
+local SpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE", 14, Config.PvP.Speed)
+local CaptureSpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE DE CAPTURA", 108, Config.PvP.CaptureSpeed)
+local HeightBox = numericBox(PvPValuesPanel, "ALTURA", 202, Config.PvP.Height)
+local DepthBox = numericBox(PvPValuesPanel, "PROFUNDIDADE", 296, Config.PvP.Depth)
+local DistanceBox = numericBox(PvPValuesPanel, "DISTÂNCIA", 390, Config.PvP.Distance)
+
+PvPValuesPanel.Size = UDim2.new(1, -32, 0, 145)
+pvpControls.Speed = SpeedBox
+pvpControls.CaptureSpeed = CaptureSpeedBox
+pvpControls.Height = HeightBox
+pvpControls.Depth = DepthBox
+pvpControls.Distance = DistanceBox
+
+local PvPInfo = create("TextLabel", {
+	Size = UDim2.new(1, -28, 0, 78),
+	Position = UDim2.fromOffset(14, 305),
+	BackgroundTransparency = 1,
+	Text = "V1: voo suave até o alvo e permanência atrás dele.\nV2: voo suave até o alvo e órbita contínua.\nV3: voo suave até o alvo, espera 2s, recua e retorna.\nVelocidade de Captura controla somente a aproximação até o alvo.",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = PvPPanel,
+})
+
+local PvPTarget = create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 28),
+	Position = UDim2.fromOffset(16, 390),
+	BackgroundColor3 = Theme.Background,
+	BorderSizePixel = 0,
+	Text = "ALVO: Nenhum",
+	TextColor3 = Theme.Text,
+	Font = Enum.Font.GothamBold,
+	TextSize = 9,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = PvPPanel,
+})
+
+addCorner(PvPTarget, 8)
+
+local function readPvPValues()
+	Config.PvP.Speed = tonumber(SpeedBox.Text) or Config.PvP.Speed
+	Config.PvP.CaptureSpeed = math.max(0.1, tonumber(CaptureSpeedBox.Text) or Config.PvP.CaptureSpeed)
+	Config.PvP.Height = tonumber(HeightBox.Text) or Config.PvP.Height
+	Config.PvP.Depth = tonumber(DepthBox.Text) or Config.PvP.Depth
+	Config.PvP.Distance = tonumber(DistanceBox.Text) or Config.PvP.Distance
+
+	SpeedBox.Text = tostring(Config.PvP.Speed)
+	CaptureSpeedBox.Text = tostring(Config.PvP.CaptureSpeed)
+	HeightBox.Text = tostring(Config.PvP.Height)
+	DepthBox.Text = tostring(Config.PvP.Depth)
+	DistanceBox.Text = tostring(Config.PvP.Distance)
+end
+
+local function setPvPMode(mode)
+	Config.PvP.Mode = mode
+	Config.PvP.OrbitAngle = 0
+	Config.PvP.CycleStarted = os.clock()
+	Config.PvP.Retreating = false
+
+	for modeName, button in pairs(pvpModeButtons) do
+		local active = modeName == mode
+		button.BackgroundColor3 = active and Theme.Blue or Theme.Button
+		button.TextColor3 = active and Theme.Text or Theme.Muted
+	end
+
+	addVisualLog("PVP_MODE", {
+		Message = "Modo definido: " .. mode .. ".",
+	}, Theme.Blue)
+end
+
+MatarV1Button.Activated:Connect(function()
+	setPvPMode("MatarV1")
+end)
+
+MatarV2Button.Activated:Connect(function()
+	setPvPMode("MatarV2")
+end)
+
+MatarV3Button.Activated:Connect(function()
+	setPvPMode("MatarV3")
+end)
+
+local function getPvPTarget()
+	if selectedPlayer and selectedPlayer.Parent == Players then
+		return selectedPlayer
+	end
+	return nil
+end
+
+local function getPvPDesiredCFrame(targetRoot, mode, dt)
+	local speed = Config.PvP.Speed
+	local height = Config.PvP.Height
+	local depth = Config.PvP.Depth
+	local distance = Config.PvP.Distance
+
+	local targetPosition = targetRoot.Position
+	local targetCFrame = targetRoot.CFrame
+
+	if mode == "MatarV1" then
+		local position =
+			targetPosition
+			- targetCFrame.LookVector * distance
+			+ targetCFrame.RightVector * depth
+			+ Vector3.new(0, height, 0)
+
+		return CFrame.lookAt(position, targetPosition)
+
+	elseif mode == "MatarV2" then
+		local radius = math.max(math.abs(distance), 0.25)
+		Config.PvP.OrbitAngle += (dt * math.max(math.abs(speed), 0.1)) / radius
+
+		local orbitOffset =
+			targetCFrame.RightVector * math.cos(Config.PvP.OrbitAngle) * radius
+			+ targetCFrame.LookVector * math.sin(Config.PvP.OrbitAngle) * radius
+			+ targetCFrame.LookVector * depth
+			+ Vector3.new(0, height, 0)
+
+		local position = targetPosition + orbitOffset
+		return CFrame.lookAt(position, targetPosition)
+
+	elseif mode == "MatarV3" then
+		local elapsed = os.clock() - Config.PvP.CycleStarted
+
+		if elapsed >= 2 and not Config.PvP.Retreating then
+			Config.PvP.Retreating = true
+			Config.PvP.CycleStarted = os.clock()
+		end
+
+		if Config.PvP.Retreating then
+			local retreatTime = os.clock() - Config.PvP.CycleStarted
+			if retreatTime >= 1 then
+				Config.PvP.Retreating = false
+				Config.PvP.CycleStarted = os.clock()
+			else
+				local retreatDistance = math.max(math.abs(distance) * 8, 25)
+				local position =
+					targetPosition
+					- targetCFrame.LookVector * retreatDistance
+					+ targetCFrame.RightVector * depth
+					+ Vector3.new(0, height, 0)
+
+				return CFrame.lookAt(position, targetPosition)
+			end
+		end
+
+		local position =
+			targetPosition
+			- targetCFrame.LookVector * distance
+			+ targetCFrame.RightVector * depth
+			+ Vector3.new(0, height, 0)
+
+		return CFrame.lookAt(position, targetPosition)
+	end
+
+	return targetRoot.CFrame
+end
+
+local function stopPvP()
+	pvpMoving = false
+	local localRoot = getRoot(LocalPlayer.Character)
+	if localRoot then
+		localRoot.AssemblyLinearVelocity = Vector3.zero
+	end
+	Config.PvP.Retreating = false
+
+	if pvpConnection then
+		pvpConnection:Disconnect()
+		pvpConnection = nil
+	end
+
+	PvPEnable.Text = "●  ATIVAR"
+	PvPEnable.BackgroundColor3 = Theme.Button
+	PvPEnable.TextColor3 = Theme.Muted
+	PvPStatus.Text = "● DESATIVADO  •  Alvo: " ..
+		(selectedPlayer and selectedPlayer.DisplayName or "Nenhum")
+	PvPStatus.TextColor3 = Theme.Muted
+end
+
+local function startPvP()
+	readPvPValues()
+
+	local target = getPvPTarget()
+	if not target then
+		PvPStatus.Text = "● SELECIONE UM JOGADOR EM PLAYERS IN SERVER"
+		PvPStatus.TextColor3 = Theme.Red
+		return
+	end
+
+	if pvpConnection then
+		pvpConnection:Disconnect()
+	end
+
+	pvpMoving = true
+	Config.PvP.CycleStarted = os.clock()
+	Config.PvP.Retreating = false
+
+	PvPEnable.Text = "■  PARAR"
+	PvPEnable.BackgroundColor3 = Theme.Red
+	PvPEnable.TextColor3 = Theme.Text
+	PvPStatus.Text = "● ATIVO  •  " .. Config.PvP.Mode ..
+		"  •  Alvo: " .. target.DisplayName
+	PvPStatus.TextColor3 = Theme.Green
+
+	pvpConnection = RunService.RenderStepped:Connect(function(dt)
+		if not pvpMoving then
+			return
+		end
+
+		local currentTarget = getPvPTarget()
+		local character = LocalPlayer.Character
+		local localRoot = getRoot(character)
+		local targetCharacter = currentTarget and currentTarget.Character
+		local targetRoot = getRoot(targetCharacter)
+
+		if not currentTarget or not localRoot or not targetRoot then
+			stopPvP()
+			return
+		end
+
+		local desired = getPvPDesiredCFrame(
+			targetRoot,
+			Config.PvP.Mode,
+			dt
+		)
+
+			-- Movimento físico suave. Não escreve CFrame a cada frame,
+		-- evitando o salto instantâneo que provocava correções/teleportes.
+		local captureSpeed = math.max(math.abs(Config.PvP.CaptureSpeed), 0.1)
+		local offset = desired.Position - localRoot.Position
+		local distanceToDesired = offset.Magnitude
+
+		if distanceToDesired > 0.15 then
+			local direction = offset.Unit
+			localRoot.AssemblyLinearVelocity = direction * math.min(captureSpeed, distanceToDesired / math.max(dt, 1 / 240))
+		else
+			localRoot.AssemblyLinearVelocity = Vector3.zero
+		end
+	end)
+end
+
+PvPEnable.Activated:Connect(function()
+	if pvpMoving then
+		stopPvP()
+	else
+		startPvP()
+	end
+end)
+
+local function updatePvPTarget()
+	PvPTarget.Text = "ALVO: " ..
+		(selectedPlayer and selectedPlayer.DisplayName or "Nenhum")
+
+	if pvpMoving and not getPvPTarget() then
+		stopPvP()
+	end
+end
+
+setPvPMode("MatarV1")
+updatePvPTarget()
+
+-- Player / Fuga runtime
+local function updatePlayerController()
+	local character = LocalPlayer.Character
+	local humanoid = getHumanoid(character)
+	local root = getRoot(character)
+	if not humanoid or not root then
+		return
+	end
+
+	-- IMPORTANTE: quando nenhum recurso do Player está ativo, não tocamos
+	-- no Humanoid nem na física. Isso deixa o controlador original do jogo
+	-- totalmente responsável por caminhar/correr e evita animação de corrida parada.
+	if not Config.Player.WalkSpeedEnabled
+		and not Config.Player.JumpPowerEnabled
+		and not Config.Player.Fly
+	then
+		return
+	end
+
+	if pvpMoving or fugaWasActive then
+		return
+	end
+
+	-- WalkSpeed e JumpPower só são mantidos enquanto seus respectivos
+	-- controles estão ativos. A aplicação ocorre quando o usuário alterna
+	-- o recurso, não a cada frame.
+	if Config.Player.WalkSpeedEnabled then
+		humanoid.WalkSpeed = Config.Player.WalkSpeed
+	end
+
+	if Config.Player.JumpPowerEnabled then
+		pcall(function() humanoid.UseJumpPower = true end)
+		humanoid.JumpPower = Config.Player.JumpPower
+	end
+
+	if not Config.Player.Fly then
+		return
+	end
+
+	local flySpeed = math.max(Config.Player.FlySpeed, 0)
+	local moveDirection = humanoid.MoveDirection
+	local horizontal = Vector3.new(moveDirection.X, 0, moveDirection.Z)
+	local hasHorizontalInput = horizontal.Magnitude > 0.01
+
+	if hasHorizontalInput then
+		horizontal = horizontal.Unit * flySpeed
+	else
+		horizontal = Vector3.zero
+	end
+
+	local vertical = 0
+	if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+		vertical = flySpeed
+	elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+		vertical = -flySpeed
+	end
+
+	-- Só controlamos a física quando o usuário realmente está usando o Fly.
+	-- Sem entrada, mantemos apenas a componente vertical natural do personagem.
+	if hasHorizontalInput or vertical ~= 0 then
+		root.AssemblyLinearVelocity = Vector3.new(horizontal.X, vertical, horizontal.Z)
+	end
+end
+
+local function updateFuga()
+	local character = LocalPlayer.Character
+	local humanoid = getHumanoid(character)
+	local root = getRoot(character)
+	if not humanoid or not root then
+		return
+	end
+
+	if pvpMoving then
+		return
+	end
+
+	local lowHealth = humanoid.MaxHealth > 0
+		and (humanoid.Health / humanoid.MaxHealth) <= Config.Fuga.Threshold
+
+	if Config.Fuga.Enabled and lowHealth and not fugaWasActive then
+		fugaWasActive = true
+		fugaTargetY = root.Position.Y + Config.Fuga.DownOffset
+		GrabState.Text = "● Fuga ativa: -50"
+		GrabState.TextColor3 = Theme.Red
+	end
+
+	if fugaWasActive and Config.Fuga.Enabled and fugaTargetY then
+		local deltaY = fugaTargetY - root.Position.Y
+		if math.abs(deltaY) > 1 then
+			root.AssemblyLinearVelocity = Vector3.new(0, math.clamp(deltaY * 3, -80, 80), 0)
+		else
+			root.AssemblyLinearVelocity = Vector3.zero
+		end
+	elseif fugaReleasing and not Config.Fuga.Enabled and fugaReleaseTargetY then
+		local deltaY = fugaReleaseTargetY - root.Position.Y
+		if deltaY > 1 then
+			root.AssemblyLinearVelocity = Vector3.new(0, math.clamp(deltaY * 3, 0, 100), 0)
+		else
+			root.AssemblyLinearVelocity = Vector3.zero
+			fugaReleasing = false
+			fugaReleaseTargetY = nil
+			GrabState.Text = "● Fuga desativada"
+			GrabState.TextColor3 = Theme.Muted
+		end
+	end
+end
+
+-- Navegação
+local Buttons = {
+	Home = HomeButton,
+	Players = PlayersButton,
+	World = WorldButton,
+	Survival = SurvivalButton,
+	Settings = SettingsButton,
+	Logs = LogsButton,
+	PvP = PvPButton,
+	Player = PlayerButton,
+}
+
+local function selectPage(name)
+	currentPage = name
+
+	for pageName, page in pairs(Pages) do
+		page.Visible = pageName == name .. "Page"
+	end
+
+	for buttonName, button in pairs(Buttons) do
+		local active = buttonName == name
+
+		button:SetAttribute("Selected", active)
+		button.BackgroundColor3 = active
+			and Theme.Blue
+			or Theme.Button
+
+		button.TextColor3 = active
+			and Theme.Text
+			or Theme.Muted
+	end
+end
+
+HomeButton.Activated:Connect(function()
+	selectPage("Home")
+end)
+
+PlayersButton.Activated:Connect(function()
+	selectPage("Players")
+	refreshPlayerList()
+end)
+
+WorldButton.Activated:Connect(function()
+	selectPage("World")
+end)
+
+SurvivalButton.Activated:Connect(function()
+	selectPage("Survival")
+end)
+
+SettingsButton.Activated:Connect(function()
+	selectPage("Settings")
+end)
+
+LogsButton.Activated:Connect(function()
+	selectPage("Logs")
+end)
+
+PvPButton.Activated:Connect(function()
+	selectPage("PvP")
+	updatePvPTarget()
+end)
+
+PlayerButton.Activated:Connect(function()
+	selectPage("Player")
+	applyPlayerValues()
+end)
+
+local function rejoinServer()
+	if not LocalPlayer or game.PlaceId <= 0 then
+		return
+	end
+
+	Status.Text = "● REJOIN"
+	Status.BackgroundColor3 = Theme.Blue
+	Status.TextColor3 = Theme.Text
+
+	addVisualLog("REJOIN", {
+		Message = "Solicitando reconexão ao servidor...",
+	}, Theme.Blue)
+
+	local ok, err = pcall(function()
+		TeleportService:Teleport(game.PlaceId, LocalPlayer)
+	end)
+
+	if not ok then
+		Status.Text = "● ERRO"
+		Status.BackgroundColor3 = Theme.Red
+		Status.TextColor3 = Theme.Text
+
+		addVisualLog("REJOIN_ERROR", {
+			Message = tostring(err),
+		}, Theme.Red)
+	end
+end
+
+RejoinButton.Activated:Connect(rejoinServer)
+
+-- Minimizar
+MinimizeButton.Activated:Connect(function()
+	minimized = true
+
+	tween(Main, {
+		Size = UDim2.fromOffset(850, 70),
+	}, 0.25)
+
+	task.delay(0.2, function()
+		if minimized and Main.Parent then
+			Sidebar.Visible = false
+			Content.Visible = false
+			TopBar.Visible = false
+			Main.Visible = false
+			FloatingButton.Visible = true
+		end
+	end)
+end)
+
+FloatingButton.Activated:Connect(function()
+	minimized = false
+	FloatingButton.Visible = false
+	Main.Visible = true
+	TopBar.Visible = true
+
+	tween(Main, {
+		Size = UDim2.fromOffset(850, 570),
+	}, 0.25)
+
+	task.delay(0.18, function()
+		if not minimized and Main.Parent then
+			Sidebar.Visible = true
+			Content.Visible = true
+		end
+	end)
+end)
+
+-- Arrastar ícone flutuante
+local floatingDragging = false
+local floatingDragStart
+local floatingStartPosition
+
+FloatingButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		floatingDragging = true
+		floatingDragStart = input.Position
+		floatingStartPosition = FloatingButton.Position
+	end
+end)
+
+-- Arrastar janela
+local dragging = false
+local dragStart
+local startPosition
+
+TopBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		dragging = true
+		dragStart = input.Position
+		startPosition = Main.Position
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType ~= Enum.UserInputType.MouseMovement
+		and input.UserInputType ~= Enum.UserInputType.Touch
+	then
+		return
+	end
+
+	if floatingDragging then
+		local delta = input.Position - floatingDragStart
+		FloatingButton.Position = UDim2.new(
+			floatingStartPosition.X.Scale,
+			floatingStartPosition.X.Offset + delta.X,
+			floatingStartPosition.Y.Scale,
+			floatingStartPosition.Y.Offset + delta.Y
+		)
+	end
+
+	if dragging then
+		local delta = input.Position - dragStart
+
+		Main.Position = UDim2.new(
+			startPosition.X.Scale,
+			startPosition.X.Offset + delta.X,
+			startPosition.Y.Scale,
+			startPosition.Y.Offset + delta.Y
+		)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		dragging = false
+		floatingDragging = false
+	end
+end)
+
+-- Atualização de personagens e mundo
+LocalPlayer.CharacterAdded:Connect(function()
+	originalWalkSpeed = nil
+	originalJumpPower = nil
+	task.wait(0.2)
+	captureOriginalPlayerValues()
+	if Config.Player.WalkSpeedEnabled or Config.Player.JumpPowerEnabled then
+		applyPlayerValues()
+	end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+	task.wait(0.4)
+
+	if player.Character then
+		createPlayerESP(player)
+	end
+
+	refreshPlayerList()
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	removePlayerESP(player)
+
+	if playerEntries[player] then
+		playerEntries[player].Button:Destroy()
+		playerEntries[player] = nil
+	end
+
+	allies[player] = nil
+
+	if selectedPlayer == player then
+		selectedPlayer = nil
+		if pvpMoving then
+			stopPvP()
+		end
+	end
+
+	refreshPlayerList()
+end)
 
 workspace.DescendantAdded:Connect(function(object)
-    task.wait(0.1)
-    if not running then return end
-    if CONFIG.CorpseESP and object:IsA("Model") and isCorpse(object) then
-        createWorldIcon(corpseESP, object, "🦴", Color3.fromRGB(255, 245, 215))
-    elseif CONFIG.MeatESP and (object:IsA("Model") or object:IsA("BasePart")) and isMeat(object) then
-        createWorldIcon(meatESP, object, "🥩", Color3.fromRGB(255, 145, 110))
-    end
+	if not Config.AutoRefresh then
+		return
+	end
+
+	task.delay(0.2, function()
+		if running then
+			local objectType = worldObjectType(object)
+
+			if objectType then
+				createWorldESP(object, objectType)
+			end
+		end
+	end)
 end)
+
 workspace.DescendantRemoving:Connect(function(object)
-    removeWorldIcon(corpseESP, object)
-    removeWorldIcon(meatESP, object)
+	removeWorldESP(object)
 end)
+
 task.spawn(function()
-    while running and ScreenGui.Parent do
-        scanWorld()
-        task.wait(CONFIG.WorldScanInterval)
-    end
-end)
+	while running and ScreenGui.Parent do
+		if Config.AutoRefresh then
+			refreshPlayerList()
+			refreshPlayerESP()
+			refreshWorldESP()
+		end
 
-local function distanceTo(player)
-    local a = getRoot(LocalPlayer.Character)
-    local b = getRoot(player.Character)
-    if not a or not b then return math.huge end
-    return (a.Position - b.Position).Magnitude
-end
-
-local function updatePlayerButton(player)
-    local button = playerButtons[player]
-    if not button or not button.Parent then return end
-    local d = distanceTo(player)
-    if d == math.huge then button.Text = player.DisplayName .. "  •  --"
-    elseif d <= CONFIG.NearDistance then button.Text = string.format("%s  •  %.1f  •  PERTO", player.DisplayName, d)
-    else button.Text = string.format("%s  •  %.1f", player.DisplayName, d) end
-end
-
-local function refreshPlayers()
-    local query = string.lower(SearchBox.Text or "")
-    for player, button in pairs(playerButtons) do
-        if button and button.Parent then
-            local a = string.lower(player.DisplayName)
-            local b = string.lower(player.Name)
-            button.Visible = query == "" or string.find(a, query, 1, true) or string.find(b, query, 1, true)
-        end
-    end
-end
-
-local function selectPlayer(player, button)
-    if not player or player == LocalPlayer then return end
-    selectedPlayer = player
-    for _, other in pairs(playerButtons) do other.BackgroundColor3 = CONFIG.Theme.Button end
-    if button then button.BackgroundColor3 = CONFIG.Theme.PrimaryBlue end
-    TargetLabel.Text = getDinosaurIcon(player, player.Character) .. "  " .. player.DisplayName .. "  @" .. player.Name
-    Status.Text = "● TARGET"
-    Status.BackgroundColor3 = Color3.fromRGB(35, 75, 120)
-    updateTargetHighlight()
-    notify("Alvo selecionado: " .. player.DisplayName, CONFIG.Theme.PrimaryBlue)
-end
-
-local function createPlayerButton(player)
-    if player == LocalPlayer or playerButtons[player] then return end
-    local button = create("TextButton", {Size = UDim2.new(1, 0, 0, 31), BackgroundColor3 = CONFIG.Theme.Button, BorderSizePixel = 0, Text = player.DisplayName .. "  •  --", TextColor3 = CONFIG.Theme.Text, Font = Enum.Font.GothamMedium, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Left, Parent = PlayerList})
-    corner(button, 6)
-    local p = Instance.new("UIPadding")
-    p.PaddingLeft = UDim.new(0, 8)
-    p.Parent = button
-    hover(button, CONFIG.Theme.Button, CONFIG.Theme.ButtonHover)
-    button.Activated:Connect(function() selectPlayer(player, button) end)
-    playerButtons[player] = button
-    updatePlayerButton(player)
-    refreshPlayers()
-end
-
-for _, player in ipairs(Players:GetPlayers()) do createPlayerButton(player) end
-Players.PlayerAdded:Connect(createPlayerButton)
-SearchBox:GetPropertyChangedSignal("Text"):Connect(refreshPlayers)
-
-local function stopSpectating()
-    local camera = workspace.CurrentCamera
-    if originalCameraSubject then camera.CameraSubject = originalCameraSubject end
-    if originalCameraType then camera.CameraType = originalCameraType end
-    originalCameraSubject = nil
-    originalCameraType = nil
-    spectating = false
-    SpectateButton.Text = "◌  ESPECTAR"
-    SpectateButtonSide.Text = "◌   SPECTATE"
-end
-
-local function toggleSpectating()
-    if not selectedPlayer then notify("Selecione um jogador primeiro.", CONFIG.Theme.Danger) return end
-    if spectating then stopSpectating() notify("Espectador desativado.", CONFIG.Theme.Card) return end
-    local humanoid = getHumanoid(selectedPlayer.Character)
-    if not humanoid then notify("Personagem do alvo indisponível.", CONFIG.Theme.Danger) return end
-    local camera = workspace.CurrentCamera
-    originalCameraSubject = camera.CameraSubject
-    originalCameraType = camera.CameraType
-    camera.CameraType = Enum.CameraType.Custom
-    camera.CameraSubject = humanoid
-    spectating = true
-    SpectateButton.Text = "■  PARAR ESPECTADOR"
-    SpectateButtonSide.Text = "■   STOP SPECTATE"
-    notify("Observando " .. selectedPlayer.DisplayName, CONFIG.Theme.Purple)
-end
-
-local function stopMovement()
-    movementMode = "None"
-    orbitAngle = 0
-    if movementConnection then movementConnection:Disconnect() movementConnection = nil end
-    local root = getRoot(LocalPlayer.Character)
-    local humanoid = getHumanoid(LocalPlayer.Character)
-    if root then root.AssemblyLinearVelocity = Vector3.zero root.AssemblyAngularVelocity = Vector3.zero end
-    if humanoid then humanoid.AutoRotate = true end
-    Status.Text = "● STOPPED"
-    Status.BackgroundColor3 = Color3.fromRGB(70, 40, 45)
-end
-
-local function startMovement(newMode)
-    if not selectedPlayer then notify("Selecione um jogador primeiro.", CONFIG.Theme.Danger) return end
-    local root = getRoot(LocalPlayer.Character)
-    local targetRoot = getRoot(selectedPlayer.Character)
-    local humanoid = getHumanoid(LocalPlayer.Character)
-    if not root or not targetRoot then notify("Seu personagem ou o alvo não está pronto.", CONFIG.Theme.Danger) return end
-    if movementConnection then movementConnection:Disconnect() end
-    movementMode = newMode
-    orbitAngle = 0
-    if humanoid then humanoid.AutoRotate = false end
-    Status.Text = newMode == "Orbit" and "● ORBIT" or "● COSTAS"
-    Status.BackgroundColor3 = newMode == "Orbit" and Color3.fromRGB(35, 75, 120) or CONFIG.Theme.Purple
-
-    movementConnection = RunService.Heartbeat:Connect(function(dt)
-        if movementMode == "None" or not selectedPlayer or selectedPlayer.Parent ~= Players then stopMovement() return end
-        local currentRoot = getRoot(LocalPlayer.Character)
-        local currentTargetRoot = getRoot(selectedPlayer.Character)
-        if not currentRoot or not currentTargetRoot then stopMovement() return end
-        local targetPosition = currentTargetRoot.Position
-        local radius = math.clamp(distance, CONFIG.DistanceMin, CONFIG.DistanceMax)
-        local goal
-        if movementMode == "Orbit" then
-            orbitAngle += dt * CONFIG.OrbitSpeed * math.clamp(speed / 35, 0.05, 6)
-            goal = targetPosition + Vector3.new(math.cos(orbitAngle) * radius, height, math.sin(orbitAngle) * radius)
-        else
-            goal = targetPosition - currentTargetRoot.CFrame.LookVector * radius + Vector3.new(0, height, 0)
-        end
-        local difference = goal - currentRoot.Position
-        if difference.Magnitude > 0.05 then
-            local step = math.min(difference.Magnitude, math.max(speed * dt, 0.01))
-            local nextPosition = currentRoot.Position + difference.Unit * step
-            currentRoot.CFrame = currentRoot.CFrame:Lerp(CFrame.new(nextPosition), math.clamp(dt * CONFIG.MovementSmoothness, 0, 1))
-            currentRoot.AssemblyLinearVelocity = Vector3.zero
-            currentRoot.AssemblyAngularVelocity = Vector3.zero
-        end
-        local look = targetPosition - currentRoot.Position
-        if look.Magnitude > 0.01 then currentRoot.CFrame = currentRoot.CFrame:Lerp(CFrame.lookAt(currentRoot.Position, targetPosition), math.clamp(dt * 10, 0, 1)) end
-    end)
-end
-
-local function teleportToTarget()
-    if not selectedPlayer then notify("Selecione um jogador primeiro.", CONFIG.Theme.Danger) return end
-    local root = getRoot(LocalPlayer.Character)
-    local targetRoot = getRoot(selectedPlayer.Character)
-    if not root or not targetRoot then notify("Alvo indisponível.", CONFIG.Theme.Danger) return end
-    root.CFrame = targetRoot.CFrame * CFrame.new(0, height, distance)
-    root.AssemblyLinearVelocity = Vector3.zero
-    notify("Teleportado para perto de " .. selectedPlayer.DisplayName, CONFIG.Theme.Success)
-end
-
-local escapeRemote
-local function findEscapeRemote()
-    for _, name in ipairs({"AntiGrabEscape", "BreakGrab", "EscapeGrab", "GrabEscape"}) do
-        local remote = ReplicatedStorage:FindFirstChild(name, true)
-        if remote and remote:IsA("RemoteEvent") then return remote end
-    end
-end
-
-local function fireEscape()
-    escapeRemote = escapeRemote or findEscapeRemote()
-    if escapeRemote then pcall(function() escapeRemote:FireServer() end) end
-    local character = LocalPlayer.Character
-    if character then character:SetAttribute("GrabEscapeRequested", true) end
-    grabActive = false
-    notify("Comando de fuga enviado.", CONFIG.Theme.Success)
-end
-
-local function isGrabbed()
-    local character = LocalPlayer.Character
-    if not character then return false end
-    return character:GetAttribute("Grabbed") == true or character:GetAttribute("IsGrabbed") == true or character:GetAttribute("GrabbedByDinosaur") == true or character:FindFirstChild("Grabbed") ~= nil
-end
-
-local GrabPanel = create("Frame", {Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, -130, 0, 20), BackgroundColor3 = Color3.fromRGB(22, 25, 32), BackgroundTransparency = 0.12, BorderSizePixel = 0, Visible = false, ZIndex = 80, Parent = ScreenGui})
-corner(GrabPanel, 9)
-stroke(GrabPanel, Color3.fromRGB(255, 90, 90), 1, 0.2)
-local GrabLabel = create("TextLabel", {Size = UDim2.new(1, -15, 0, 25), Position = UDim2.fromOffset(8, 3), BackgroundTransparency = 1, Text = "⛓  AGARRADO", TextColor3 = Color3.fromRGB(255, 150, 150), Font = Enum.Font.GothamBold, TextSize = 11, ZIndex = 81, Parent = GrabPanel})
-local EscapeButton = create("TextButton", {Size = UDim2.fromOffset(110, 22), Position = UDim2.new(0.5, -55, 1, -26), BackgroundColor3 = CONFIG.Theme.Success, BorderSizePixel = 0, Text = "ESPAÇO  •  ESCAPAR", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 8, ZIndex = 82, Parent = GrabPanel})
-corner(EscapeButton, 6)
-EscapeButton.Activated:Connect(fireEscape)
-
-AntiGrabButton.Activated:Connect(function()
-    antiGrabEnabled = not antiGrabEnabled
-    AntiGrabButton.Text = antiGrabEnabled and "⛓  ANTI GRAB: ON" or "⛓  ANTI GRAB: OFF"
-    AntiGrabButton.BackgroundColor3 = antiGrabEnabled and CONFIG.Theme.Primary or CONFIG.Theme.Button
-    if not antiGrabEnabled then grabActive = false end
-    notify(antiGrabEnabled and "Anti Grab ativado." or "Anti Grab desativado.", antiGrabEnabled and CONFIG.Theme.Success or CONFIG.Theme.Card)
-end)
-
-OrbitButton.Activated:Connect(function() startMovement("Orbit") end)
-BackrideButton.Activated:Connect(function() startMovement("Backride") end)
-TeleportButton.Activated:Connect(teleportToTarget)
-SpectateButton.Activated:Connect(toggleSpectating)
-SpectateButtonSide.Activated:Connect(toggleSpectating)
-StopButton.Activated:Connect(function() stopMovement() if spectating then stopSpectating() end notify("Ações interrompidas.", CONFIG.Theme.Danger) end)
-MovementButton.Activated:Connect(function() notify("Painel de movimento ativo.", CONFIG.Theme.PrimaryBlue) end)
-ClearButton.Activated:Connect(function()
-    stopMovement()
-    if spectating then stopSpectating() end
-    selectedPlayer = nil
-    removeTargetHighlight()
-    TargetLabel.Text = "Nenhum jogador selecionado"
-    Status.Text = "● READY"
-    Status.BackgroundColor3 = CONFIG.Theme.Success
-    for _, b in pairs(playerButtons) do b.BackgroundColor3 = CONFIG.Theme.Button end
-end)
-
-PlayerESPButton.Activated:Connect(function()
-    CONFIG.PlayerESP = not CONFIG.PlayerESP
-    for _, data in pairs(playerESP) do
-        data.Gui.Enabled = CONFIG.PlayerESP
-        if data.Highlight then data.Highlight.Enabled = CONFIG.PlayerESP end
-    end
-    PlayerESPButton.Text = CONFIG.PlayerESP and "◉   PLAYERS: ON" or "◉   PLAYERS: OFF"
-    PlayerESPButton.BackgroundColor3 = CONFIG.PlayerESP and CONFIG.Theme.PrimaryBlue or CONFIG.Theme.Button
-end)
-
-NamesButton.Activated:Connect(function()
-    CONFIG.PlayerNames = not CONFIG.PlayerNames
-    for _, data in pairs(playerESP) do data.NameLabel.Visible = CONFIG.PlayerNames end
-    NamesButton.Text = CONFIG.PlayerNames and "◎   NAMES: ON" or "◎   NAMES: OFF"
-    NamesButton.BackgroundColor3 = CONFIG.PlayerNames and CONFIG.Theme.PrimaryBlue or CONFIG.Theme.Button
-end)
-
-HealthButton.Activated:Connect(function()
-    CONFIG.HealthESP = not CONFIG.HealthESP
-    for _, data in pairs(playerESP) do data.HealthBack.Visible = CONFIG.HealthESP data.HealthText.Visible = CONFIG.HealthESP end
-    HealthButton.Text = CONFIG.HealthESP and "♥   HEALTH: ON" or "♥   HEALTH: OFF"
-    HealthButton.BackgroundColor3 = CONFIG.HealthESP and CONFIG.Theme.PrimaryBlue or CONFIG.Theme.Button
-end)
-
-CorpseButton.Activated:Connect(function()
-    CONFIG.CorpseESP = not CONFIG.CorpseESP
-    if not CONFIG.CorpseESP then for object in pairs(corpseESP) do removeWorldIcon(corpseESP, object) end end
-    CorpseButton.Text = CONFIG.CorpseESP and "🦴   CORPSES: ON" or "🦴   CORPSES: OFF"
-    CorpseButton.BackgroundColor3 = CONFIG.CorpseESP and CONFIG.Theme.PrimaryBlue or CONFIG.Theme.Button
-end)
-
-MeatButton.Activated:Connect(function()
-    CONFIG.MeatESP = not CONFIG.MeatESP
-    if not CONFIG.MeatESP then for object in pairs(meatESP) do removeWorldIcon(meatESP, object) end end
-    MeatButton.Text = CONFIG.MeatESP and "🥩   MEAT: ON" or "🥩   MEAT: OFF"
-    MeatButton.BackgroundColor3 = CONFIG.MeatESP and CONFIG.Theme.PrimaryBlue or CONFIG.Theme.Button
+		task.wait(Config.PlayerRefreshTime)
+	end
 end)
 
 RunService.RenderStepped:Connect(function()
-    for player in pairs(playerButtons) do if player.Parent == Players then updatePlayerButton(player) end end
-    if selectedPlayer and selectedPlayer.Parent == Players then
-        local d = distanceTo(selectedPlayer)
-        if d ~= math.huge then TargetLabel.Text = getDinosaurIcon(selectedPlayer, selectedPlayer.Character) .. "  " .. selectedPlayer.DisplayName .. string.format("  •  %.1f studs", d) end
-    end
+	if not running then
+		return
+	end
 
-    if antiGrabEnabled then
-        local currentlyGrabbed = isGrabbed()
-        if currentlyGrabbed and not grabActive then
-            grabActive = true
-            grabDeadline = os.clock() + 3
-            notify("Você foi agarrado! Pressione ESPAÇO.", CONFIG.Theme.Danger)
-        elseif not currentlyGrabbed and grabActive then
-            grabActive = false
-        end
-    end
+	updateLocalHealth()
+	updateHomeStats()
+	updatePvPTarget()
+	updatePlayerController()
+	updateFuga()
 
-    if grabActive and antiGrabEnabled then
-        GrabPanel.Visible = true
-        local remaining = math.max(0, grabDeadline - os.clock())
-        GrabLabel.Text = string.format("⛓  AGARRADO  •  %.1fs", remaining)
-    else
-        GrabPanel.Visible = false
-    end
+	for player, data in pairs(playerEntries) do
+		if player.Parent == Players then
+			data.Update()
+		end
+	end
+
+	for player in pairs(playerESP) do
+		if player.Parent == Players then
+			updatePlayerESP(player)
+		end
+	end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function(character)
-    stopMovement()
-    if spectating then stopSpectating() end
-    local humanoid = character:WaitForChild("Humanoid", 5)
-    if humanoid then
-        if deathConnection then deathConnection:Disconnect() end
-        deathConnection = humanoid.Died:Connect(function() stopMovement() if spectating then stopSpectating() end end)
-    end
+-- Limpeza ao fechar
+CloseButton.Activated:Connect(function()
+	running = false
+
+	if spectating then
+		stopSpectating()
+	end
+
+	if pvpMoving then
+		stopPvP()
+	end
+
+	Config.Player.Fly = false
+	fugaWasActive = false
+	fugaTargetY = nil
+	fugaReleasing = false
+	fugaReleaseTargetY = nil
+	floatingDragging = false
+
+	for player in pairs(playerESP) do
+		removePlayerESP(player)
+	end
+
+	for object in pairs(worldESP) do
+		removeWorldESP(object)
+	end
+
+	if originalClockTime ~= nil then
+		Lighting.ClockTime = originalClockTime
+		Lighting.Brightness = originalBrightness
+	end
+
+	for _, connection in ipairs(connections) do
+		if connection and connection.Connected then
+			connection:Disconnect()
+		end
+	end
+
+	ScreenGui:Destroy()
 end)
 
-local dragStart
-local startPosition
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingWindow = true
-        dragStart = input.Position
-        startPosition = Main.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if not draggingWindow or not dragStart or not startPosition then return end
-    if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-    local delta = input.Position - dragStart
-    Main.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingWindow = false end
+-- Inicialização
+selectPage("Home")
+
+-- Mostra o Hub primeiro; as varreduras pesadas são iniciadas em seguida.
+task.defer(function()
+	captureOriginalPlayerValues()
+	refreshPlayerList()
+	refreshPlayerESP()
+	addVisualLog("READY", {
+		Message = "Visual Hub iniciado.",
+	}, Theme.Green)
 end)
 
-Minimize.Activated:Connect(function()
-    minimized = not minimized
-    Sidebar.Visible = not minimized
-    Content.Visible = not minimized
-    Main.Size = minimized and UDim2.fromOffset(760, 58) or UDim2.fromOffset(760, 480)
-    Minimize.Text = minimized and "□" or "—"
+-- A varredura do mundo pode ser grande em jogos pesados, então roda separadamente.
+task.spawn(function()
+	task.wait()
+	if running and ScreenGui.Parent then
+		refreshWorldESP()
+	end
 end)
 
-Close.Activated:Connect(function()
-    running = false
-    stopMovement()
-    if spectating then stopSpectating() end
-    removeTargetHighlight()
-    for player in pairs(playerESP) do removePlayerESP(player) end
-    for object in pairs(corpseESP) do removeWorldIcon(corpseESP, object) end
-    for object in pairs(meatESP) do removeWorldIcon(meatESP, object) end
-    if deathConnection then deathConnection:Disconnect() end
-    ScreenGui:Destroy()
-end)
-
-UserInputService.InputBegan:Connect(function(input, processed)
-    if input.KeyCode == Enum.KeyCode.Space and grabActive and antiGrabEnabled then fireEscape() end
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.Insert then ScreenGui.Enabled = not ScreenGui.Enabled end
-    if input.KeyCode == Enum.KeyCode.F then teleportToTarget() end
-    if input.KeyCode == Enum.KeyCode.G then toggleSpectating() end
-    if input.KeyCode == Enum.KeyCode.X then stopMovement() if spectating then stopSpectating() end end
-end)
-
-PlayerESPButton.BackgroundColor3 = CONFIG.Theme.PrimaryBlue
-NamesButton.BackgroundColor3 = CONFIG.Theme.PrimaryBlue
-HealthButton.BackgroundColor3 = CONFIG.Theme.PrimaryBlue
-CorpseButton.BackgroundColor3 = CONFIG.Theme.PrimaryBlue
-MeatButton.BackgroundColor3 = CONFIG.Theme.PrimaryBlue
-
-print("[Vida de Dinossauro] Hub PC visual final carregado.")
-print("[Vida de Dinossauro] Painel: ícone + nick + vida.")
-print("[Vida de Dinossauro] Cadáver: somente 🦴 | Carne: somente 🥩")
+print("[Vida de Dinossauro] Visual Hub carregado.")
+print("[Vida de Dinossauro] Por: zJaquesx777")
