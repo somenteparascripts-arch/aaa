@@ -78,6 +78,7 @@ local Config = {
 
 	AutoRefresh = true,
 	RemoveNight = false,
+	RemoveGrass = false,
 
 	MaxDistance = 1000,
 	WorldRefreshTime = 2,
@@ -105,7 +106,7 @@ local Config = {
 		Enabled = false,
 		Mode = "MatarV1",
 		Speed = 3,
-		CaptureSpeed = 8,
+		CaptureSpeed = 45,
 		Height = 0,
 		Depth = 0,
 		Distance = 3,
@@ -1317,6 +1318,14 @@ createToggle(SettingsPanel, "REMOVER NOITE", 258, Config.RemoveNight, function(v
 	end
 end)
 
+createToggle(SettingsPanel, "REMOVER GRAMAS", 300, Config.RemoveGrass, function(value)
+	Config.RemoveGrass = value
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		pcall(function() terrain.Decoration = not value end)
+	end
+end)
+
 -- Player
 pageTitle(
 	PlayerPage,
@@ -2444,22 +2453,23 @@ local PvPEnable = create("TextButton", {
 
 addCorner(PvPEnable, 8)
 
-local function numericBox(parent, labelText, x, defaultValue)
+local function numericBox(parent, labelText, x, y, defaultValue)
 	local label = create("TextLabel", {
-		Size = UDim2.fromOffset(82, 18),
-		Position = UDim2.fromOffset(x, 64),
+		Size = UDim2.fromOffset(165, 18),
+		Position = UDim2.fromOffset(x, y),
 		BackgroundTransparency = 1,
 		Text = labelText,
 		TextColor3 = Theme.Muted,
 		Font = Enum.Font.GothamBold,
 		TextSize = 8,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
 		Parent = parent,
 	})
 
 	local box = create("TextBox", {
-		Size = UDim2.fromOffset(82, 32),
-		Position = UDim2.fromOffset(x, 84),
+		Size = UDim2.fromOffset(145, 34),
+		Position = UDim2.fromOffset(x, y + 22),
 		BackgroundColor3 = Theme.Button,
 		BorderSizePixel = 0,
 		Text = tostring(defaultValue),
@@ -2518,20 +2528,43 @@ local MatarV2Button = createPvPModeButton("MatarV2", "MATAR V2", 120)
 local MatarV3Button = createPvPModeButton("MatarV3", "MATAR V3", 240)
 
 local PvPValuesPanel = panel(PvPPanel, {
-	Size = UDim2.new(1, -32, 0, 145),
+	Size = UDim2.new(1, -32, 0, 216),
 	Position = UDim2.fromOffset(16, 111),
 	BackgroundColor3 = Theme.Background,
 	BorderSizePixel = 0,
 	Parent = PvPPanel,
 })
 
-local SpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE", 14, Config.PvP.Speed)
-local CaptureSpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE DE CAPTURA", 108, Config.PvP.CaptureSpeed)
-local HeightBox = numericBox(PvPValuesPanel, "ALTURA", 202, Config.PvP.Height)
-local DepthBox = numericBox(PvPValuesPanel, "PROFUNDIDADE", 296, Config.PvP.Depth)
-local DistanceBox = numericBox(PvPValuesPanel, "DISTÂNCIA", 390, Config.PvP.Distance)
+-- Layout em 3 colunas x 2 linhas, com espaço suficiente para os nomes.
+local PvPCol1 = 14
+local PvPCol2 = 220
+local PvPCol3 = 426
+local PvPRow1 = 16
+local PvPRow2 = 108
 
-PvPValuesPanel.Size = UDim2.new(1, -32, 0, 145)
+local SpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE", PvPCol1, PvPRow1, Config.PvP.Speed)
+
+local CaptureSpeedBox = numericBox(PvPValuesPanel, "VELOCIDADE DE CAPTURA", PvPCol2, PvPRow1, Config.PvP.CaptureSpeed)
+
+local HeightBox = numericBox(PvPValuesPanel, "ALTURA", PvPCol3, PvPRow1, Config.PvP.Height)
+
+local DepthBox = numericBox(PvPValuesPanel, "PROFUNDIDADE", PvPCol1, PvPRow2, Config.PvP.Depth)
+
+local DistanceBox = numericBox(PvPValuesPanel, "DISTÂNCIA", PvPCol2, PvPRow2, Config.PvP.Distance)
+
+local CaptureWarning = create("TextLabel", {
+	Size = UDim2.fromOffset(180, 18),
+	Position = UDim2.fromOffset(PvPCol2, 72),
+	BackgroundTransparency = 1,
+	Text = "Recomendado: 45 ou abaixo",
+	TextColor3 = Theme.Yellow,
+	Font = Enum.Font.GothamMedium,
+	TextSize = 8,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	Parent = PvPValuesPanel,
+})
+
 pvpControls.Speed = SpeedBox
 pvpControls.CaptureSpeed = CaptureSpeedBox
 pvpControls.Height = HeightBox
@@ -2539,8 +2572,8 @@ pvpControls.Depth = DepthBox
 pvpControls.Distance = DistanceBox
 
 local PvPInfo = create("TextLabel", {
-	Size = UDim2.new(1, -28, 0, 78),
-	Position = UDim2.fromOffset(14, 305),
+	Size = UDim2.new(1, -28, 0, 92),
+	Position = UDim2.fromOffset(14, 335),
 	BackgroundTransparency = 1,
 	Text = "V1: voo suave até o alvo e permanência atrás dele.\nV2: voo suave até o alvo e órbita contínua.\nV3: voo suave até o alvo, espera 2s, recua e retorna.\nVelocidade de Captura controla somente a aproximação até o alvo.",
 	TextColor3 = Theme.Muted,
@@ -2554,7 +2587,7 @@ local PvPInfo = create("TextLabel", {
 
 local PvPTarget = create("TextLabel", {
 	Size = UDim2.new(1, -32, 0, 28),
-	Position = UDim2.fromOffset(16, 390),
+	Position = UDim2.fromOffset(16, 425),
 	BackgroundColor3 = Theme.Background,
 	BorderSizePixel = 0,
 	Text = "ALVO: Nenhum",
@@ -2759,12 +2792,18 @@ local function startPvP()
 		local captureSpeed = math.max(math.abs(Config.PvP.CaptureSpeed), 0.1)
 		local offset = desired.Position - localRoot.Position
 		local distanceToDesired = offset.Magnitude
+		local targetVelocity = targetRoot.AssemblyLinearVelocity
 
 		if distanceToDesired > 0.15 then
 			local direction = offset.Unit
-			localRoot.AssemblyLinearVelocity = direction * math.min(captureSpeed, distanceToDesired / math.max(dt, 1 / 240))
+			local farBoost = math.clamp(distanceToDesired * 0.75, 0, captureSpeed * 2.0)
+			local correctionSpeed = math.clamp(captureSpeed + farBoost, captureSpeed, captureSpeed * 3.0)
+			local correctionVelocity = direction * correctionSpeed
+			localRoot.AssemblyLinearVelocity = targetVelocity + correctionVelocity
 		else
-			localRoot.AssemblyLinearVelocity = Vector3.zero
+			-- Já chegou às costas: acompanha diretamente a velocidade do alvo
+			-- para não ficar para trás quando ele acelera/corre.
+			localRoot.AssemblyLinearVelocity = targetVelocity
 		end
 	end)
 end
@@ -3177,6 +3216,17 @@ RunService.RenderStepped:Connect(function()
 		return
 	end
 
+	-- Efeitos visuais locais
+	if Config.RemoveNight then
+		Lighting.ClockTime = 12
+		Lighting.Brightness = math.max(Lighting.Brightness, 2)
+	end
+
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		pcall(function() terrain.Decoration = not Config.RemoveGrass end)
+	end
+
 	updateLocalHealth()
 	updateHomeStats()
 	updatePvPTarget()
@@ -3226,6 +3276,11 @@ CloseButton.Activated:Connect(function()
 	if originalClockTime ~= nil then
 		Lighting.ClockTime = originalClockTime
 		Lighting.Brightness = originalBrightness
+	end
+
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		pcall(function() terrain.Decoration = true end)
 	end
 
 	for _, connection in ipairs(connections) do
