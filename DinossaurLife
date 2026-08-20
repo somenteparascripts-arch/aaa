@@ -107,6 +107,7 @@ local Config = {
 		Mode = "MatarV1",
 		Speed = 3,
 		CaptureSpeed = 45,
+		ServerSafeSpeed = 44, -- limite físico interno para evitar rubberband/teleporte
 		Height = 0,
 		Depth = 0,
 		Distance = 3,
@@ -140,6 +141,7 @@ local logEntries = {}
 local characterConnections = {}
 local worldScanVersion = 0
 local pvpMoving = false
+local pvpLocked = false
 local pvpConnection
 local pvpControls = {}
 local pvpModeButtons = {}
@@ -313,50 +315,24 @@ end
 local function dinosaurIcon(value)
 	local text = string.lower(tostring(value or ""))
 
-	if string.find(text, "velociraptor", 1, true)
-		or string.find(text, "raptor", 1, true)
-	then
-		return "⚡"
-	end
+	local icons = {
+		{"velociraptor", "⚡"}, {"utahraptor", "⚡"}, {"deinonychus", "⚡"}, {"raptor", "⚡"},
+		{"deinosuchus", "🐊"}, {"sarcosuchus", "🐊"},
+		{"mosasaurus", "🦈"}, {"mosasaur", "🦈"}, {"shark", "🦈"}, {"megalodon", "🦈"},
+		{"tyrannosaurus", "🦖"}, {"trex", "🦖"}, {"t-rex", "🦖"}, {"rex", "🦖"},
+		{"giganotosaurus", "🦖"}, {"allosaurus", "🦖"}, {"carnotaurus", "🦖"}, {"ceratosaurus", "🦖"},
+		{"spinosaurus", "🐊"}, {"spino", "🐊"}, {"suchomimus", "🐊"}, {"baryonyx", "🐊"},
+		{"triceratops", "🦏"}, {"styracosaurus", "🦏"}, {"ceratops", "🦏"},
+		{"brachiosaurus", "🦕"}, {"brachio", "🦕"}, {"brontosaurus", "🦕"}, {"diplodocus", "🦕"},
+		{"stegosaurus", "🦕"}, {"ankylosaurus", "🦕"},
+		{"iguanodon", "🦎"}, {"parasaurolophus", "🦎"}, {"hadrosaurus", "🦎"}, {"pachycephalosaurus", "🦎"},
+		{"pteranodon", "🦅"}, {"pterodactyl", "🦅"}, {"quetzalcoatlus", "🦅"},
+	}
 
-	if string.find(text, "deinosuchus", 1, true) then
-		return "🐊"
-	end
-
-	if string.find(text, "mosasaur", 1, true)
-		or string.find(text, "mosasaurus", 1, true)
-		or string.find(text, "mosasaurid", 1, true)
-	then
-		return "🦈"
-	end
-
-	if string.find(text, "trex", 1, true)
-		or string.find(text, "t-rex", 1, true)
-		or string.find(text, "rex", 1, true)
-	then
-		return "🦖"
-	end
-
-	if string.find(text, "triceratops", 1, true)
-		or string.find(text, "ceratops", 1, true)
-	then
-		return "🦏"
-	end
-
-	if string.find(text, "spino", 1, true) then
-		return "🐊"
-	end
-
-	if string.find(text, "brachio", 1, true)
-		or string.find(text, "bronto", 1, true)
-	then
-		return "🦕"
-	end
-
-	if string.find(text, "pteranodon", 1, true)
-		or string.find(text, "pterodactyl", 1, true)
-	then
-		return "🦅"
+	for _, pair in ipairs(icons) do
+		if string.find(text, pair[1], 1, true) then
+			return pair[2]
+		end
 	end
 
 	return "🦖"
@@ -1015,7 +991,7 @@ pageTitle(
 )
 
 local SurvivalPanel = panel(SurvivalPage, {
-	Size = UDim2.new(1, 0, 0, 310),
+	Size = UDim2.new(1, 0, 0, 395),
 	Position = UDim2.fromOffset(0, 62),
 	BackgroundColor3 = Theme.Panel,
 	BorderSizePixel = 0,
@@ -1093,10 +1069,10 @@ end)
 
 create("TextLabel", {
 	Size = UDim2.new(1, -32, 0, 34),
-	Position = UDim2.fromOffset(16, 205),
+	Position = UDim2.fromOffset(16, 194),
 	BackgroundTransparency = 1,
-	Text = "O detector observa MovementState, ReplicatedMovementState e IsBeingCarried.",
-	TextColor3 = Theme.Muted,
+	Text = "⚠ DETECTOR ANTI-GRAB: EM FASE DE TESTES\nO detector observa MovementState, ReplicatedMovementState e IsBeingCarried.",
+	TextColor3 = Theme.Yellow,
 	Font = Enum.Font.GothamMedium,
 	TextSize = 9,
 	TextWrapped = true,
@@ -1117,7 +1093,7 @@ local function releaseFromFuga()
 	end
 end
 
-createToggle(SurvivalPanel, "FUGA", 205, Config.Fuga.Enabled, function(value)
+createToggle(SurvivalPanel, "FUGA", 248, Config.Fuga.Enabled, function(value)
 	Config.Fuga.Enabled = value
 	if value then
 		GrabState.Text = "● Fuga: aguardando vida baixa"
@@ -1131,10 +1107,48 @@ createToggle(SurvivalPanel, "FUGA", 205, Config.Fuga.Enabled, function(value)
 	end
 end)
 create("TextLabel", {
-	Size = UDim2.new(1, -32, 0, 45),
-	Position = UDim2.fromOffset(16, 246),
+	Size = UDim2.fromOffset(190, 18),
+	Position = UDim2.fromOffset(16, 292),
 	BackgroundTransparency = 1,
-	Text = "Fuga: quando sua vida ficar baixa, o personagem desce aproximadamente -50.\nAo desativar Fuga, ele sobe aproximadamente +100 a partir da posição atual.",
+	Text = "VIDA PARA ATIVAR FUGA (%)",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 8,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = SurvivalPanel,
+})
+
+local FugaThresholdBox = create("TextBox", {
+	Size = UDim2.fromOffset(120, 32),
+	Position = UDim2.fromOffset(16, 314),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = tostring(math.floor(Config.Fuga.Threshold * 100 + 0.5)),
+	PlaceholderText = "15",
+	TextColor3 = Theme.Text,
+	PlaceholderColor3 = Theme.Muted,
+	Font = Enum.Font.Code,
+	TextSize = 10,
+	ClearTextOnFocus = false,
+	Parent = SurvivalPanel,
+})
+addCorner(FugaThresholdBox, 8)
+
+FugaThresholdBox.FocusLost:Connect(function()
+	local percent = tonumber(FugaThresholdBox.Text) or (Config.Fuga.Threshold * 100)
+	percent = math.clamp(percent, 1, 100)
+	Config.Fuga.Threshold = percent / 100
+	FugaThresholdBox.Text = tostring(math.floor(percent + 0.5))
+	if Config.Fuga.Enabled and not fugaWasActive then
+		GrabState.Text = string.format("● Fuga: aguardando vida <= %.0f%%", percent)
+	end
+end)
+
+create("TextLabel", {
+	Size = UDim2.new(1, -32, 0, 55),
+	Position = UDim2.fromOffset(16, 354),
+	BackgroundTransparency = 1,
+	Text = "Fuga: ao atingir a porcentagem configurada, o personagem desce aproximadamente -50.\nAo desativar Fuga, ele sobe aproximadamente +100 a partir da posição atual.",
 	TextColor3 = Theme.Muted,
 	Font = Enum.Font.GothamMedium,
 	TextSize = 9,
@@ -1152,7 +1166,7 @@ pageTitle(
 )
 
 local SettingsPanel = panel(SettingsPage, {
-	Size = UDim2.new(1, 0, 0, 340),
+	Size = UDim2.new(1, 0, 0, 380),
 	Position = UDim2.fromOffset(0, 62),
 	BackgroundColor3 = Theme.Panel,
 	BorderSizePixel = 0,
@@ -2721,6 +2735,7 @@ end
 
 local function stopPvP()
 	pvpMoving = false
+	pvpLocked = false
 	local localRoot = getRoot(LocalPlayer.Character)
 	if localRoot then
 		localRoot.AssemblyLinearVelocity = Vector3.zero
@@ -2755,6 +2770,7 @@ local function startPvP()
 	end
 
 	pvpMoving = true
+	pvpLocked = false
 	Config.PvP.CycleStarted = os.clock()
 	Config.PvP.Retreating = false
 
@@ -2771,8 +2787,8 @@ local function startPvP()
 		end
 
 		local currentTarget = getPvPTarget()
-		local character = LocalPlayer.Character
-		local localRoot = getRoot(character)
+		local localCharacter = LocalPlayer.Character
+		local localRoot = getRoot(localCharacter)
 		local targetCharacter = currentTarget and currentTarget.Character
 		local targetRoot = getRoot(targetCharacter)
 
@@ -2787,23 +2803,108 @@ local function startPvP()
 			dt
 		)
 
-			-- Movimento físico suave. Não escreve CFrame a cada frame,
-		-- evitando o salto instantâneo que provocava correções/teleportes.
-		local captureSpeed = math.max(math.abs(Config.PvP.CaptureSpeed), 0.1)
 		local offset = desired.Position - localRoot.Position
 		local distanceToDesired = offset.Magnitude
-		local targetVelocity = targetRoot.AssemblyLinearVelocity
+
+		-- Quando chega perto da posição de ataque, entra no modo LOCK.
+		-- A partir daqui a movimentação passa a acompanhar a velocidade
+		-- do alvo continuamente, para não ficar para trás em dinossauros rápidos.
+		if not pvpLocked and distanceToDesired <= 2.5 then
+			-- A captura termina aqui. A partir deste ponto não existe mais
+			-- perseguição nem compensação pela velocidade do alvo.
+			pvpLocked = true
+			PvPStatus.Text = "● FIXADO  •  " .. Config.PvP.Mode ..
+				"  •  Alvo: " .. currentTarget.DisplayName
+			PvPStatus.TextColor3 = Theme.Green
+		end
+
+		local rawTargetVelocity = targetRoot.AssemblyLinearVelocity
+		local targetHorizontalVelocity = Vector3.new(
+			rawTargetVelocity.X,
+			0,
+			rawTargetVelocity.Z
+		)
+
+		if pvpLocked then
+			-- LOCK ABSOLUTO:
+			-- a perseguição termina assim que chegamos perto do alvo.
+			-- Depois disso, a velocidade do alvo NÃO participa mais do cálculo.
+			-- O personagem é colocado diretamente na posição do modo atual
+			-- (costas/orbita/recuo) a cada frame, mantendo o offset fixo.
+			local lockedCFrame = getPvPDesiredCFrame(
+				targetRoot,
+				Config.PvP.Mode,
+				dt
+			)
+
+			localRoot.CFrame = lockedCFrame
+			localRoot.AssemblyLinearVelocity = Vector3.zero
+			localRoot.AssemblyAngularVelocity = Vector3.zero
+
+			return
+		end
+
+		-- CAPTURA: mantém a velocidade dentro do limite seguro.
+		local captureSpeed = math.max(
+			math.abs(Config.PvP.CaptureSpeed),
+			0.1
+		)
+
+		local safeTotalSpeed = math.max(
+			5,
+			math.abs(Config.PvP.ServerSafeSpeed or 44)
+		)
 
 		if distanceToDesired > 0.15 then
 			local direction = offset.Unit
-			local farBoost = math.clamp(distanceToDesired * 0.75, 0, captureSpeed * 2.0)
-			local correctionSpeed = math.clamp(captureSpeed + farBoost, captureSpeed, captureSpeed * 3.0)
-			local correctionVelocity = direction * correctionSpeed
-			localRoot.AssemblyLinearVelocity = targetVelocity + correctionVelocity
+
+			local correctionSpeed = math.min(
+				captureSpeed,
+				math.max(4, distanceToDesired * 6)
+			)
+
+			local targetSpeed = targetHorizontalVelocity.Magnitude
+
+			if targetSpeed > safeTotalSpeed then
+				targetHorizontalVelocity =
+					targetHorizontalVelocity.Unit * safeTotalSpeed
+				targetSpeed = safeTotalSpeed
+			end
+
+			local remainingSpeed = math.sqrt(
+				math.max(
+					0,
+					safeTotalSpeed * safeTotalSpeed
+						- targetSpeed * targetSpeed
+				)
+			)
+
+			correctionSpeed = math.min(
+				correctionSpeed,
+				remainingSpeed
+			)
+
+			local desiredVelocity =
+				targetHorizontalVelocity
+				+ direction * correctionSpeed
+
+			if desiredVelocity.Magnitude > safeTotalSpeed then
+				desiredVelocity =
+					desiredVelocity.Unit * safeTotalSpeed
+			end
+
+			localRoot.AssemblyLinearVelocity =
+				desiredVelocity
 		else
-			-- Já chegou às costas: acompanha diretamente a velocidade do alvo
-			-- para não ficar para trás quando ele acelera/corre.
-			localRoot.AssemblyLinearVelocity = targetVelocity
+			-- Pequena tolerância antes de entrar no LOCK.
+			pvpLocked = true
+
+			PvPStatus.Text = "● FIXADO  •  " .. Config.PvP.Mode ..
+				"  •  Alvo: " .. currentTarget.DisplayName
+			PvPStatus.TextColor3 = Theme.Green
+
+			localRoot.AssemblyLinearVelocity =
+				targetHorizontalVelocity
 		end
 	end)
 end
@@ -3140,6 +3241,7 @@ end)
 
 -- Atualização de personagens e mundo
 LocalPlayer.CharacterAdded:Connect(function()
+	pvpLocked = false
 	originalWalkSpeed = nil
 	originalJumpPower = nil
 	task.wait(0.2)
