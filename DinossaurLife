@@ -111,6 +111,9 @@ local Config = {
 		Height = 0,
 		Depth = 0,
 		Distance = 3,
+		HitboxDebugRadius = 6,
+		HitboxDebugEnabled = false,
+		HitboxV2Enabled = false,
 		OrbitAngle = 0,
 		CycleStarted = 0,
 		Retreating = false,
@@ -2566,6 +2569,40 @@ local DepthBox = numericBox(PvPValuesPanel, "PROFUNDIDADE", PvPCol1, PvPRow2, Co
 
 local DistanceBox = numericBox(PvPValuesPanel, "DISTÂNCIA", PvPCol2, PvPRow2, Config.PvP.Distance)
 
+local HitboxDebugRadiusBox = numericBox(
+	PvPValuesPanel,
+	"RAIO HITBOX (VISUAL)",
+	PvPCol3,
+	PvPRow2,
+	Config.PvP.HitboxDebugRadius
+)
+
+local HitboxDebugToggle = create("TextButton", {
+	Size = UDim2.fromOffset(145, 25),
+	Position = UDim2.fromOffset(PvPCol3, PvPRow2 + 64),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "○  HITBOX VISUAL OFF",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 8,
+	Parent = PvPValuesPanel,
+})
+addCorner(HitboxDebugToggle, 7)
+
+local HitboxV2Toggle = create("TextButton", {
+	Size = UDim2.fromOffset(145, 25),
+	Position = UDim2.fromOffset(PvPCol3, PvPRow2 + 94),
+	BackgroundColor3 = Theme.Button,
+	BorderSizePixel = 0,
+	Text = "○  HITBOX V2 • LINHA",
+	TextColor3 = Theme.Muted,
+	Font = Enum.Font.GothamBold,
+	TextSize = 8,
+	Parent = PvPValuesPanel,
+})
+addCorner(HitboxV2Toggle, 7)
+
 local CaptureWarning = create("TextLabel", {
 	Size = UDim2.fromOffset(180, 18),
 	Position = UDim2.fromOffset(PvPCol2, 72),
@@ -2584,12 +2621,13 @@ pvpControls.CaptureSpeed = CaptureSpeedBox
 pvpControls.Height = HeightBox
 pvpControls.Depth = DepthBox
 pvpControls.Distance = DistanceBox
+pvpControls.HitboxDebugRadius = HitboxDebugRadiusBox
 
 local PvPInfo = create("TextLabel", {
 	Size = UDim2.new(1, -28, 0, 92),
 	Position = UDim2.fromOffset(14, 335),
 	BackgroundTransparency = 1,
-	Text = "V1: voo suave até o alvo e permanência atrás dele.\nV2: voo suave até o alvo e órbita contínua.\nV3: voo suave até o alvo, espera 2s, recua e retorna.\nVelocidade de Captura controla somente a aproximação até o alvo.",
+	Text = "V1: voo suave até o alvo e permanência atrás dele.\nV2: voo suave até o alvo e órbita contínua.\nV3: voo suave até o alvo, espera 2s, recua e retorna.\nVelocidade de Captura controla somente a aproximação até o alvo.\nHitbox Visual: apenas visualiza uma área de referência no alvo; não altera a hitbox real do jogo.",
 	TextColor3 = Theme.Muted,
 	Font = Enum.Font.GothamMedium,
 	TextSize = 9,
@@ -2621,12 +2659,18 @@ local function readPvPValues()
 	Config.PvP.Height = tonumber(HeightBox.Text) or Config.PvP.Height
 	Config.PvP.Depth = tonumber(DepthBox.Text) or Config.PvP.Depth
 	Config.PvP.Distance = tonumber(DistanceBox.Text) or Config.PvP.Distance
+	Config.PvP.HitboxDebugRadius = math.clamp(
+		tonumber(HitboxDebugRadiusBox.Text) or Config.PvP.HitboxDebugRadius,
+		2,
+		25
+	)
 
 	SpeedBox.Text = tostring(Config.PvP.Speed)
 	CaptureSpeedBox.Text = tostring(Config.PvP.CaptureSpeed)
 	HeightBox.Text = tostring(Config.PvP.Height)
 	DepthBox.Text = tostring(Config.PvP.Depth)
 	DistanceBox.Text = tostring(Config.PvP.Distance)
+	HitboxDebugRadiusBox.Text = tostring(Config.PvP.HitboxDebugRadius)
 end
 
 local function setPvPMode(mode)
@@ -2656,6 +2700,126 @@ end)
 
 MatarV3Button.Activated:Connect(function()
 	setPvPMode("MatarV3")
+end)
+
+local hitboxVisualAdornment
+local hitboxV2Beam
+local hitboxV2LocalAttachment
+local hitboxV2TargetAttachment
+
+local function clearHitboxV2Line()
+	if hitboxV2Beam then
+		hitboxV2Beam:Destroy()
+		hitboxV2Beam = nil
+	end
+	if hitboxV2LocalAttachment then
+		hitboxV2LocalAttachment:Destroy()
+		hitboxV2LocalAttachment = nil
+	end
+	if hitboxV2TargetAttachment then
+		hitboxV2TargetAttachment:Destroy()
+		hitboxV2TargetAttachment = nil
+	end
+end
+
+local function updateHitboxV2Line()
+	clearHitboxV2Line()
+
+	if not Config.PvP.HitboxV2Enabled then
+		HitboxV2Toggle.Text = "○  HITBOX V2 • LINHA"
+		HitboxV2Toggle.BackgroundColor3 = Theme.Button
+		HitboxV2Toggle.TextColor3 = Theme.Muted
+		return
+	end
+
+	HitboxV2Toggle.Text = "●  HITBOX V2 • LINHA"
+	HitboxV2Toggle.BackgroundColor3 = Theme.Blue
+	HitboxV2Toggle.TextColor3 = Theme.Text
+
+	local localRoot = getRoot(LocalPlayer.Character)
+	local target = selectedPlayer
+	local targetRoot = target and getRoot(target.Character)
+
+	if not localRoot or not targetRoot then
+		return
+	end
+
+	hitboxV2LocalAttachment = Instance.new("Attachment")
+	hitboxV2LocalAttachment.Name = "PvP_HitboxV2_Local"
+	hitboxV2LocalAttachment.Parent = localRoot
+
+	hitboxV2TargetAttachment = Instance.new("Attachment")
+	hitboxV2TargetAttachment.Name = "PvP_HitboxV2_Target"
+	hitboxV2TargetAttachment.Parent = targetRoot
+
+	hitboxV2Beam = Instance.new("Beam")
+	hitboxV2Beam.Name = "PvP_HitboxV2_Line"
+	hitboxV2Beam.Attachment0 = hitboxV2LocalAttachment
+	hitboxV2Beam.Attachment1 = hitboxV2TargetAttachment
+	hitboxV2Beam.FaceCamera = true
+	hitboxV2Beam.Width0 = 0.08
+	hitboxV2Beam.Width1 = 0.08
+	hitboxV2Beam.LightEmission = 1
+	hitboxV2Beam.Transparency = NumberSequence.new(0.15)
+	hitboxV2Beam.Color = ColorSequence.new(Theme.Red, Theme.Yellow)
+	hitboxV2Beam.Parent = localRoot
+end
+
+local function updateHitboxVisual()
+	if hitboxVisualAdornment then
+		hitboxVisualAdornment:Destroy()
+		hitboxVisualAdornment = nil
+	end
+	clearHitboxV2Line()
+
+	if not Config.PvP.HitboxDebugEnabled then
+		HitboxDebugToggle.Text = "○  HITBOX VISUAL OFF"
+		HitboxDebugToggle.BackgroundColor3 = Theme.Button
+		HitboxDebugToggle.TextColor3 = Theme.Muted
+		return
+	end
+
+	HitboxDebugToggle.Text = "●  HITBOX VISUAL ON"
+	HitboxDebugToggle.BackgroundColor3 = Theme.Blue
+	HitboxDebugToggle.TextColor3 = Theme.Text
+
+	local target = selectedPlayer
+	local targetRoot = target and getRoot(target.Character)
+
+	if targetRoot then
+		local adornment = Instance.new("SphereHandleAdornment")
+		adornment.Name = "PvP_HitboxDebug"
+		adornment.Adornee = targetRoot
+		adornment.Radius = math.clamp(Config.PvP.HitboxDebugRadius, 2, 25)
+		adornment.AlwaysOnTop = true
+		adornment.Transparency = 0.72
+		adornment.Color3 = Theme.Red
+		adornment.ZIndex = 5
+		adornment.Parent = targetRoot
+		hitboxVisualAdornment = adornment
+	end
+end
+
+HitboxDebugToggle.Activated:Connect(function()
+	Config.PvP.HitboxDebugEnabled = not Config.PvP.HitboxDebugEnabled
+	updateHitboxVisual()
+end)
+
+HitboxV2Toggle.Activated:Connect(function()
+	Config.PvP.HitboxV2Enabled = not Config.PvP.HitboxV2Enabled
+	updateHitboxV2Line()
+end)
+
+HitboxDebugRadiusBox.FocusLost:Connect(function()
+	Config.PvP.HitboxDebugRadius = math.clamp(
+		tonumber(HitboxDebugRadiusBox.Text) or Config.PvP.HitboxDebugRadius,
+		2,
+		25
+	)
+	HitboxDebugRadiusBox.Text = tostring(Config.PvP.HitboxDebugRadius)
+	if Config.PvP.HitboxDebugEnabled then
+		updateHitboxVisual()
+	end
 end)
 
 local function getPvPTarget()
@@ -2753,6 +2917,11 @@ local function stopPvP()
 	PvPStatus.Text = "● DESATIVADO  •  Alvo: " ..
 		(selectedPlayer and selectedPlayer.DisplayName or "Nenhum")
 	PvPStatus.TextColor3 = Theme.Muted
+	if hitboxVisualAdornment then
+		hitboxVisualAdornment:Destroy()
+		hitboxVisualAdornment = nil
+	end
+	clearHitboxV2Line()
 end
 
 local function startPvP()
@@ -2780,6 +2949,10 @@ local function startPvP()
 	PvPStatus.Text = "● ATIVO  •  " .. Config.PvP.Mode ..
 		"  •  Alvo: " .. target.DisplayName
 	PvPStatus.TextColor3 = Theme.Green
+
+	if Config.PvP.HitboxDebugEnabled then
+		updateHitboxVisual()
+	end
 
 	pvpConnection = RunService.RenderStepped:Connect(function(dt)
 		if not pvpMoving then
@@ -2920,6 +3093,13 @@ end)
 local function updatePvPTarget()
 	PvPTarget.Text = "ALVO: " ..
 		(selectedPlayer and selectedPlayer.DisplayName or "Nenhum")
+
+	if Config.PvP.HitboxDebugEnabled then
+		updateHitboxVisual()
+	end
+	if Config.PvP.HitboxV2Enabled then
+		updateHitboxV2Line()
+	end
 
 	if pvpMoving and not getPvPTarget() then
 		stopPvP()
